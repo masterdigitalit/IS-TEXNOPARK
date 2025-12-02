@@ -1,28 +1,84 @@
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 
-class User(models.Model):
+class UserManager(BaseUserManager):
+    def create_user(self, email, password, role='user', **extra_fields):
+        if not email:
+            raise ValueError('The Email must be set')
+        if not password:
+            raise ValueError('The Password must be set')
+        
+        email = self.normalize_email(email)
+        user = self.model(
+            email=email,
+            role=role,
+            **extra_fields
+        )
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password, **extra_fields):
+        extra_fields.setdefault('role', 'admin')
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('is_verified', True)
+        
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+            
+        return self.create_user(email, password, **extra_fields)
+
+class User(AbstractBaseUser, PermissionsMixin):
+    """Модель пользователя с расширенными полями"""
+    
+    email = models.EmailField(
+        _('email'),
+        unique=True,
+        error_messages={
+            'unique': _("Пользователь с таким email уже существует."),
+        },
+    )
+    
+    # Дополнительные поля ФИО согласно вашей схеме
+    first_name = models.CharField(
+        _('имя'),
+        max_length=150,
+        blank=True,
+        null=True
+    )
+    
     middle_name = models.CharField(
+        _('фамилия'),
+        max_length=150,
+        blank=True,
+        null=True
+    )
+    
+    last_name = models.CharField(
         _('отчество'),
         max_length=150,
         blank=True,
         null=True
     )
     
-
     created_at = models.DateTimeField(
         _('дата создания'),
-        auto_now_add=True  # Автоматически устанавливается при создании
+        auto_now_add=True
     )
     
-    # Last_login_at (уже есть в AbstractUser как last_login)
-    # Для совместимости с вашей схемой переименуем или оставим как есть
-    
-    # Роль (Role) - используем группы Django или кастомное поле
+    # Роль пользователя
     ROLE_CHOICES = [
         ('admin', 'Админ'),
         ('student', 'Студент'),
         ('teacher', 'Учитель'),
         ('referee', 'Судья'),
+  
     ]
     
     role = models.CharField(
@@ -32,17 +88,19 @@ class User(models.Model):
         default='user'
     )
     
-    # Почта (email уже есть в AbstractUser)
-    # Phone - телефон
+    # Телефон
     phone = models.CharField(
         _('телефон'),
         max_length=20,
         blank=True,
         null=True,
-        unique=True
+        unique=True,
+        error_messages={
+            'unique': _("Пользователь с таким телефоном уже существует."),
+        }
     )
     
-    # Avatar_url - URL аватара
+    # URL аватара
     avatar_url = models.URLField(
         _('URL аватара'),
         max_length=500,
@@ -50,11 +108,57 @@ class User(models.Model):
         null=True
     )
     
-    # Дополнительные поля для улучшения безопасности
+    # Подтверждение пользователя
     is_verified = models.BooleanField(
         _('подтвержден'),
         default=False
     )
+    
+    # Поля из AbstractBaseUser/PermissionsMixin
+    is_staff = models.BooleanField(
+        _('staff status'),
+        default=False,
+        help_text=_('Designates whether the user can log into this admin site.'),
+    )
+    
+    is_active = models.BooleanField(
+        _('active'),
+        default=True,
+        help_text=_(
+            'Designates whether this user should be treated as active. '
+            'Unselect this instead of deleting accounts.'
+        ),
+    )
+    
+    date_joined = models.DateTimeField(_('date joined'), default=timezone.now)
+    
+    # Указываем custom related_name для избежания конфликтов
+    groups = models.ManyToManyField(
+        'auth.Group',
+        verbose_name=_('groups'),
+        blank=True,
+        help_text=_(
+            'The groups this user belongs to. A user will get all permissions '
+            'granted to each of their groups.'
+        ),
+        related_name='custom_user_set',  # Добавлено
+        related_query_name='user',
+    )
+    
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+        verbose_name=_('user permissions'),
+        blank=True,
+        help_text=_('Specific permissions for this user.'),
+        related_name='custom_user_set',  # Добавлено
+        related_query_name='user',
+    )
+    
+    # Указываем, что поле email используется для аутентификации вместо username
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []  # Поля, требуемые при создании суперпользователя
+    
+    objects = UserManager()
     
     # Метаданные
     class Meta:
@@ -66,25 +170,41 @@ class User(models.Model):
             models.Index(fields=['phone']),
             models.Index(fields=['role']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['last_name', 'first_name']),
         ]
     
     def __str__(self):
-        # Красивое отображение в админке
-        if self.first_name and self.last_name:
-            return f"{self.last_name} {self.first_name}"
-        return self.username or self.email
+        """Строковое представление пользователя"""
+        if self.get_full_name():
+            return self.get_full_name()
+        return self.email
     
     def get_full_name(self):
-        # Переопределяем метод для отображения ФИО
+        """Полное ФИО в порядке: Фамилия Имя Отчество"""
         full_name = []
-        if self.last_name:
-            full_name.append(self.last_name)
-        if self.first_name:
-            full_name.append(self.first_name)
-        if self.middle_name:
+        if self.middle_name:  # Фамилия
             full_name.append(self.middle_name)
-        return " ".join(full_name) if full_name else self.username
+        if self.first_name:   # Имя
+            full_name.append(self.first_name)
+        if self.last_name:    # Отчество
+            full_name.append(self.last_name)
+        return " ".join(full_name) if full_name else ""
+    
+    def get_short_name(self):
+        """Короткое имя: Имя Фамилия"""
+        short_name = []
+        if self.first_name:
+            short_name.append(self.first_name)
+        if self.middle_name:
+            short_name.append(self.middle_name)
+        return " ".join(short_name) if short_name else ""
     
     @property
     def full_name(self):
+        """Свойство для удобного доступа к полному имени"""
         return self.get_full_name()
+    
+    @property
+    def short_name(self):
+        """Свойство для удобного доступа к короткому имени"""
+        return self.get_short_name()
