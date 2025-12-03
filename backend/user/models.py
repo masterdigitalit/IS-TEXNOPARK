@@ -2,9 +2,9 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
-
+from django.contrib.auth.hashers import make_password, check_password
 class UserManager(BaseUserManager):
-    def create_user(self, email, password, role='user', **extra_fields):
+    def create_user(self, email, password, role='admin', **extra_fields):
         if not email:
             raise ValueError('The Email must be set')
         if not password:
@@ -45,6 +45,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         },
     )
     
+
+ 
     # Дополнительные поля ФИО согласно вашей схеме
     first_name = models.CharField(
         _('имя'),
@@ -171,7 +173,16 @@ class User(AbstractBaseUser, PermissionsMixin):
             models.Index(fields=['role']),
             models.Index(fields=['created_at']),
             models.Index(fields=['last_name', 'first_name']),
+            
         ]
+
+
+
+    def set_password(self, raw_password):
+        self.password = make_password(raw_password)
+    
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.password)
     
     def __str__(self):
         """Строковое представление пользователя"""
