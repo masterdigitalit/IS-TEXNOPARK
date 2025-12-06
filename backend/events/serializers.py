@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db.models import Count, Q, Avg
-from .models import Event, EventParticipant, OnlineEventInfo, SessionAttendance, SessionMaterial
+from .models import Event, EventParticipant, OnlineEventInfo, OfflineSessionsInfo, SessionAttendance, SessionMaterial
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -67,6 +67,45 @@ class OnlineEventInfoSerializer(serializers.ModelSerializer):
         return getattr(obj, 'attendance_count', obj.attendances.count())
 
 
+class OfflineSessionsInfoSerializer(serializers.ModelSerializer):
+    """Сериализатор для оффлайн-сессий"""
+    event_name = serializers.CharField(source='event.name', read_only=True)
+    event_id = serializers.IntegerField(source='event.id', read_only=True)
+    duration_minutes = serializers.IntegerField(read_only=True)
+    is_ongoing = serializers.BooleanField(read_only=True)
+    is_upcoming = serializers.BooleanField(read_only=True)
+    is_past = serializers.BooleanField(read_only=True)
+    full_location = serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = OfflineSessionsInfo
+        fields = [
+            'id',
+            'event_id',
+            'event_name',
+            'session_name',
+            'start_time',
+            'end_time',
+            'duration_minutes',
+            'session_notes',
+            'address',
+            'room',
+            'full_location',
+            'status',
+            'max_participants',
+            'is_active',
+            'created_at',
+            'updated_at',
+            'is_ongoing',
+            'is_upcoming',
+            'is_past'
+        ]
+        read_only_fields = [
+            'id', 'created_at', 'updated_at', 'duration_minutes',
+            'is_ongoing', 'is_upcoming', 'is_past', 'full_location'
+        ]
+
+
 class OnlineEventInfoCreateSerializer(serializers.ModelSerializer):
     """Сериализатор для создания онлайн-сессии"""
     
@@ -109,6 +148,61 @@ class OnlineEventInfoCreateSerializer(serializers.ModelSerializer):
         if end_time and start_time and end_time <= start_time:
             raise serializers.ValidationError({
                 'end_time': 'Время окончания должно быть позже времени начала'
+            })
+        
+        return data
+
+
+class OfflineSessionsInfoCreateSerializer(serializers.ModelSerializer):
+    """Сериализатор для создания оффлайн-сессии"""
+    
+    class Meta:
+        model = OfflineSessionsInfo
+        fields = [
+            'event',
+            'session_name',
+            'start_time',
+            'end_time',
+            'session_notes',
+            'address',
+            'room',
+            'max_participants',
+            'is_active'
+        ]
+    
+    def validate(self, data):
+        """Валидация при создании"""
+        request = self.context.get('request')
+        event = data.get('event')
+        
+        # Проверка прав доступа
+        if request and request.user.is_authenticated and event:
+            if event.owner != request.user and not request.user.is_staff:
+                raise serializers.ValidationError({
+                    'event': 'Вы можете создавать сессии только для своих событий'
+                })
+        
+        # Валидация времени
+        start_time = data.get('start_time')
+        end_time = data.get('end_time')
+        
+        if start_time and start_time < timezone.now():
+            raise serializers.ValidationError({
+                'start_time': 'Время начала не может быть в прошлом'
+            })
+        
+        if end_time and start_time and end_time <= start_time:
+            raise serializers.ValidationError({
+                'end_time': 'Время окончания должно быть позже времени начала'
+            })
+        
+        # Валидация местоположения
+        address = data.get('address')
+        room = data.get('room')
+        
+        if not address and not room:
+            raise serializers.ValidationError({
+                'address': 'Укажите хотя бы адрес или кабинет для оффлайн-сессии'
             })
         
         return data
@@ -165,6 +259,65 @@ class OnlineEventInfoUpdateSerializer(serializers.ModelSerializer):
         return data
 
 
+class OfflineSessionsInfoUpdateSerializer(serializers.ModelSerializer):
+    """Сериализатор для обновления оффлайн-сессии"""
+    
+    class Meta:
+        model = OfflineSessionsInfo
+        fields = [
+            'session_name',
+            'start_time',
+            'end_time',
+            'session_notes',
+            'address',
+            'room',
+            'status',
+            'max_participants',
+            'is_active'
+        ]
+    
+    def validate(self, data):
+        """Валидация при обновлении"""
+        request = self.context.get('request')
+        instance = self.instance
+        
+        # Проверка прав
+        if request and request.user.is_authenticated:
+            if instance.event.owner != request.user and not request.user.is_staff:
+                raise serializers.ValidationError({
+                    'detail': 'Вы можете редактировать только сессии своих событий'
+                })
+        
+        # Если сессия уже началась или завершена
+        if instance.status in ['ongoing', 'completed', 'cancelled']:
+            restricted_fields = {'start_time', 'end_time', 'address', 'room'}
+            for field in restricted_fields:
+                if field in data and data[field] != getattr(instance, field):
+                    raise serializers.ValidationError({
+                        field: f'Нельзя изменять {field} после начала сессии'
+                    })
+        
+        # Валидация времени
+        start_time = data.get('start_time', instance.start_time)
+        end_time = data.get('end_time', instance.end_time)
+        
+        if end_time and end_time <= start_time:
+            raise serializers.ValidationError({
+                'end_time': 'Время окончания должно быть позже времени начала'
+            })
+        
+        # Валидация местоположения
+        address = data.get('address', instance.address)
+        room = data.get('room', instance.room)
+        
+        if not address and not room:
+            raise serializers.ValidationError({
+                'address': 'Укажите хотя бы адрес или кабинет для оффлайн-сессии'
+            })
+        
+        return data
+
+
 class EventListSerializer(serializers.ModelSerializer):
     """Сериализатор для списка событий"""
     owner_username = serializers.CharField(source='owner.username', read_only=True)
@@ -172,7 +325,9 @@ class EventListSerializer(serializers.ModelSerializer):
     days_remaining = serializers.SerializerMethodField()
     participant_count = serializers.SerializerMethodField()
     online_sessions_count = serializers.SerializerMethodField()
+    offline_sessions_count = serializers.SerializerMethodField()
     has_online_sessions = serializers.SerializerMethodField()
+    has_offline_sessions = serializers.SerializerMethodField()
     
     class Meta:
         model = Event
@@ -189,7 +344,9 @@ class EventListSerializer(serializers.ModelSerializer):
             'days_remaining',
             'participant_count',
             'online_sessions_count',
-            'has_online_sessions'
+            'offline_sessions_count',
+            'has_online_sessions',
+            'has_offline_sessions'
         ]
         read_only_fields = ['id', 'created_at', 'is_open', 'owner_username']
     
@@ -208,9 +365,17 @@ class EventListSerializer(serializers.ModelSerializer):
         """Количество онлайн-сессий события"""
         return getattr(obj, 'online_sessions_count', obj.online_sessions.count())
     
+    def get_offline_sessions_count(self, obj):
+        """Количество оффлайн-сессий события"""
+        return getattr(obj, 'offline_sessions_count', obj.offline_sessions.count())
+    
     def get_has_online_sessions(self, obj):
         """Есть ли онлайн-сессии"""
         return self.get_online_sessions_count(obj) > 0
+    
+    def get_has_offline_sessions(self, obj):
+        """Есть ли оффлайн-сессии"""
+        return self.get_offline_sessions_count(obj) > 0
 
 
 class EventDetailSerializer(serializers.ModelSerializer):
@@ -219,9 +384,13 @@ class EventDetailSerializer(serializers.ModelSerializer):
     is_open = serializers.BooleanField(read_only=True)
     participant_count = serializers.SerializerMethodField()
     online_sessions = OnlineEventInfoSerializer(many=True, read_only=True)
+    offline_sessions = OfflineSessionsInfoSerializer(many=True, read_only=True)
     online_sessions_count = serializers.SerializerMethodField()
-    upcoming_sessions = serializers.SerializerMethodField()
-    ongoing_sessions = serializers.SerializerMethodField()
+    offline_sessions_count = serializers.SerializerMethodField()
+    upcoming_online_sessions = serializers.SerializerMethodField()
+    ongoing_online_sessions = serializers.SerializerMethodField()
+    upcoming_offline_sessions = serializers.SerializerMethodField()
+    ongoing_offline_sessions = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
     can_join = serializers.SerializerMethodField()
     is_joined = serializers.SerializerMethodField()
@@ -242,9 +411,13 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'is_active',
             'participant_count',
             'online_sessions',
+            'offline_sessions',
             'online_sessions_count',
-            'upcoming_sessions',
-            'ongoing_sessions',
+            'offline_sessions_count',
+            'upcoming_online_sessions',
+            'ongoing_online_sessions',
+            'upcoming_offline_sessions',
+            'ongoing_offline_sessions',
             'can_edit',
             'can_join',
             'is_joined'
@@ -252,7 +425,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'created_at', 'updated_at', 'is_open', 
             'owner', 'participant_count', 'online_sessions',
-            'online_sessions_count'
+            'offline_sessions', 'online_sessions_count', 'offline_sessions_count'
         ]
     
     def get_participant_count(self, obj):
@@ -261,15 +434,48 @@ class EventDetailSerializer(serializers.ModelSerializer):
     def get_online_sessions_count(self, obj):
         return getattr(obj, 'online_sessions_count', obj.online_sessions.count())
     
-    def get_upcoming_sessions(self, obj):
+    def get_offline_sessions_count(self, obj):
+        return getattr(obj, 'offline_sessions_count', obj.offline_sessions.count())
+    
+    def get_upcoming_online_sessions(self, obj):
         """Получить предстоящие онлайн-сессии"""
-        sessions = obj.upcoming_online_sessions[:10]
+        sessions = obj.online_sessions.filter(
+            start_time__gt=timezone.now(),
+            status='scheduled',
+            is_active=True
+        )[:10]
         return OnlineEventInfoSerializer(sessions, many=True, context=self.context).data
     
-    def get_ongoing_sessions(self, obj):
+    def get_ongoing_online_sessions(self, obj):
         """Получить текущие онлайн-сессии"""
-        sessions = obj.ongoing_online_sessions
+        now = timezone.now()
+        sessions = obj.online_sessions.filter(
+            start_time__lte=now,
+            end_time__gte=now,
+            status='ongoing',
+            is_active=True
+        )
         return OnlineEventInfoSerializer(sessions, many=True, context=self.context).data
+    
+    def get_upcoming_offline_sessions(self, obj):
+        """Получить предстоящие оффлайн-сессии"""
+        sessions = obj.offline_sessions.filter(
+            start_time__gt=timezone.now(),
+            status='scheduled',
+            is_active=True
+        )[:10]
+        return OfflineSessionsInfoSerializer(sessions, many=True, context=self.context).data
+    
+    def get_ongoing_offline_sessions(self, obj):
+        """Получить текущие оффлайн-сессии"""
+        now = timezone.now()
+        sessions = obj.offline_sessions.filter(
+            start_time__lte=now,
+            end_time__gte=now,
+            status='ongoing',
+            is_active=True
+        )
+        return OfflineSessionsInfoSerializer(sessions, many=True, context=self.context).data
     
     def get_can_edit(self, obj):
         request = self.context.get('request')
@@ -566,24 +772,43 @@ class OnlineSessionMinimalSerializer(serializers.ModelSerializer):
         ]
 
 
-class CalendarSessionSerializer(serializers.ModelSerializer):
-    """Сериализатор для календаря сессий"""
+class OfflineSessionMinimalSerializer(serializers.ModelSerializer):
+    """Минималистичный сериализатор для оффлайн-сессий"""
     event_name = serializers.CharField(source='event.name', read_only=True)
-    event_status = serializers.CharField(source='event.status', read_only=True)
+    is_ongoing = serializers.BooleanField(read_only=True)
+    full_location = serializers.CharField(read_only=True)
     
     class Meta:
-        model = OnlineEventInfo
+        model = OfflineSessionsInfo
         fields = [
-            'id',
-            'session_name',
-            'start_time',
+            'id', 
+            'session_name', 
+            'start_time', 
             'end_time',
             'event_name',
-            'event_status',
             'status',
-            'platform',
-            'link'
+            'full_location',
+            'address',
+            'room',
+            'is_ongoing'
         ]
+
+
+class CalendarSessionSerializer(serializers.Serializer):
+    """Сериализатор для календаря сессий (объединяет онлайн и оффлайн)"""
+    id = serializers.IntegerField()
+    session_name = serializers.CharField()
+    start_time = serializers.DateTimeField()
+    end_time = serializers.DateTimeField()
+    event_name = serializers.CharField()
+    event_status = serializers.CharField()
+    status = serializers.CharField()
+    session_type = serializers.CharField()  # 'online' или 'offline'
+    link = serializers.URLField(required=False, allow_null=True)
+    platform = serializers.CharField(required=False, allow_null=True)
+    full_location = serializers.CharField(required=False, allow_null=True)
+    address = serializers.CharField(required=False, allow_null=True)
+    room = serializers.CharField(required=False, allow_null=True)
 
 
 class EventStatisticsSerializer(serializers.Serializer):
@@ -594,4 +819,20 @@ class EventStatisticsSerializer(serializers.Serializer):
     total_participants = serializers.IntegerField(min_value=0)
     avg_participants_per_event = serializers.FloatField(min_value=0)
     events_by_status = serializers.DictField()
-    online_sessions_count = serializers.IntegerField
+    online_sessions_count = serializers.IntegerField(min_value=0)
+    offline_sessions_count = serializers.IntegerField(min_value=0)
+    total_sessions_count = serializers.IntegerField(min_value=0)
+
+
+class SessionStatisticsSerializer(serializers.Serializer):
+    """Статистика по сессиям"""
+    total_sessions = serializers.IntegerField(min_value=0)
+    online_sessions = serializers.IntegerField(min_value=0)
+    offline_sessions = serializers.IntegerField(min_value=0)
+    scheduled_sessions = serializers.IntegerField(min_value=0)
+    ongoing_sessions = serializers.IntegerField(min_value=0)
+    completed_sessions = serializers.IntegerField(min_value=0)
+    cancelled_sessions = serializers.IntegerField(min_value=0)
+    sessions_by_type = serializers.DictField()
+    sessions_by_status = serializers.DictField()
+    avg_duration_minutes = serializers.FloatField(min_value=0)

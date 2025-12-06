@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.db import models
 from django.db.models import Count
 from .models import (
-    Event, EventParticipant, OnlineEventInfo, 
+    Event, EventParticipant, OnlineEventInfo, OfflineSessionsInfo,
     SessionAttendance, SessionMaterial
 )
 
@@ -31,6 +31,19 @@ class OnlineEventInfoInline(admin.StackedInline):
     fields = [
         'session_name', 'start_time', 'end_time', 
         'link', 'platform', 'status', 'is_active'
+    ]
+    readonly_fields = ['status']
+    show_change_link = True
+    classes = ['collapse']
+
+
+class OfflineSessionsInfoInline(admin.StackedInline):
+    """Inline для оффлайн-сессий"""
+    model = OfflineSessionsInfo
+    extra = 0
+    fields = [
+        'session_name', 'start_time', 'end_time', 
+        'address', 'room', 'status', 'is_active'
     ]
     readonly_fields = ['status']
     show_change_link = True
@@ -113,18 +126,37 @@ class IsOngoingFilter(admin.SimpleListFilter):
         return queryset
 
 
+class SessionTypeFilter(admin.SimpleListFilter):
+    """Фильтр по типу сессии (онлайн/оффлайн)"""
+    title = 'Тип сессии'
+    parameter_name = 'session_type'
+    
+    def lookups(self, request, model_admin):
+        return (
+            ('online', 'Онлайн'),
+            ('offline', 'Оффлайн'),
+        )
+    
+    def queryset(self, request, queryset):
+        if self.value() == 'online':
+            return queryset.filter(online_sessions__isnull=False).distinct()
+        if self.value() == 'offline':
+            return queryset.filter(offline_sessions__isnull=False).distinct()
+        return queryset
+
+
 # Основные админ-классы
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     """Админ-класс для событий"""
     list_display = [
         'name', 'owner_safe_link', 'status_display', 'is_open_display',
-        'participant_count', 'online_sessions_count', 
-        'created_at_display', 'is_active_display'
+        'participant_count', 'online_sessions_count', 'offline_sessions_count',
+        'total_sessions_count', 'created_at_display', 'is_active_display'
     ]
     
     list_filter = [
-        'status', 'is_active', IsOpenFilter,
+        'status', 'is_active', IsOpenFilter, SessionTypeFilter,
         'created_at', 'owner'
     ]
     
@@ -150,16 +182,56 @@ class EventAdmin(admin.ModelAdmin):
             return format_html('<span style="color: green;">✓ Да</span>')
         return format_html('<span style="color: red;">✗ Нет</span>')
     
-    @admin.display(description='Предстоящие сессии')
-    def upcoming_sessions_readonly(self, obj):
-        count = obj.upcoming_online_sessions.count()
+    @admin.display(description='Есть оффлайн сессии')
+    def has_offline_sessions_readonly(self, obj):
+        if obj.offline_sessions.exists():
+            return format_html('<span style="color: green;">✓ Да</span>')
+        return format_html('<span style="color: red;">✗ Нет</span>')
+    
+    @admin.display(description='Предстоящие онлайн')
+    def upcoming_online_sessions_readonly(self, obj):
+        count = obj.online_sessions.filter(
+            start_time__gt=timezone.now(),
+            status='scheduled',
+            is_active=True
+        ).count()
         if count > 0:
             return format_html(f'<span style="color: blue;">{count}</span>')
         return format_html(f'<span style="color: gray;">{count}</span>')
     
-    @admin.display(description='Текущие сессии')
-    def ongoing_sessions_readonly(self, obj):
-        count = obj.ongoing_online_sessions.count()
+    @admin.display(description='Текущие онлайн')
+    def ongoing_online_sessions_readonly(self, obj):
+        now = timezone.now()
+        count = obj.online_sessions.filter(
+            start_time__lte=now,
+            end_time__gte=now,
+            status='ongoing',
+            is_active=True
+        ).count()
+        if count > 0:
+            return format_html(f'<span style="color: green;">{count}</span>')
+        return format_html(f'<span style="color: gray;">{count}</span>')
+    
+    @admin.display(description='Предстоящие оффлайн')
+    def upcoming_offline_sessions_readonly(self, obj):
+        count = obj.offline_sessions.filter(
+            start_time__gt=timezone.now(),
+            status='scheduled',
+            is_active=True
+        ).count()
+        if count > 0:
+            return format_html(f'<span style="color: blue;">{count}</span>')
+        return format_html(f'<span style="color: gray;">{count}</span>')
+    
+    @admin.display(description='Текущие оффлайн')
+    def ongoing_offline_sessions_readonly(self, obj):
+        now = timezone.now()
+        count = obj.offline_sessions.filter(
+            start_time__lte=now,
+            end_time__gte=now,
+            status='ongoing',
+            is_active=True
+        ).count()
         if count > 0:
             return format_html(f'<span style="color: green;">{count}</span>')
         return format_html(f'<span style="color: gray;">{count}</span>')
@@ -167,7 +239,9 @@ class EventAdmin(admin.ModelAdmin):
     readonly_fields = [
         'created_at', 'updated_at', 
         'is_open_readonly', 'has_online_sessions_readonly',
-        'upcoming_sessions_readonly', 'ongoing_sessions_readonly'
+        'has_offline_sessions_readonly', 'upcoming_online_sessions_readonly',
+        'ongoing_online_sessions_readonly', 'upcoming_offline_sessions_readonly',
+        'ongoing_offline_sessions_readonly'
     ]
     
     fieldsets = (
@@ -183,15 +257,18 @@ class EventAdmin(admin.ModelAdmin):
         ('Статистика', {
             'fields': (
                 'is_open_readonly', 
-                'has_online_sessions_readonly', 
-                'upcoming_sessions_readonly', 
-                'ongoing_sessions_readonly'
+                'has_online_sessions_readonly',
+                'has_offline_sessions_readonly',
+                'upcoming_online_sessions_readonly',
+                'ongoing_online_sessions_readonly',
+                'upcoming_offline_sessions_readonly',
+                'ongoing_offline_sessions_readonly'
             ),
             'classes': ('collapse',)
         }),
     )
     
-    inlines = [EventParticipantInline, OnlineEventInfoInline]
+    inlines = [EventParticipantInline, OnlineEventInfoInline, OfflineSessionsInfoInline]
     
     actions = ['publish_selected', 'archive_selected', 'duplicate_selected']
     
@@ -259,7 +336,7 @@ class EventAdmin(admin.ModelAdmin):
         except Exception:
             return "0"
     
-    @admin.display(description='Онлайн сессии')
+    @admin.display(description='Онлайн')
     def online_sessions_count(self, obj):
         try:
             count = obj.online_sessions.count()
@@ -271,6 +348,34 @@ class EventAdmin(admin.ModelAdmin):
                     count
                 )
             return count
+        except Exception:
+            return "0"
+    
+    @admin.display(description='Оффлайн')
+    def offline_sessions_count(self, obj):
+        try:
+            count = obj.offline_sessions.count()
+            if count > 0:
+                url = f'/admin/events/offlinesessionsinfo/?event__id={obj.id}'
+                return format_html(
+                    '<a href="{}">{}</a>',
+                    url,
+                    count
+                )
+            return count
+        except Exception:
+            return "0"
+    
+    @admin.display(description='Всего сессий')
+    def total_sessions_count(self, obj):
+        try:
+            online_count = obj.online_sessions.count()
+            offline_count = obj.offline_sessions.count()
+            total = online_count + offline_count
+            return format_html(
+                '<strong>{}</strong>',
+                total
+            )
         except Exception:
             return "0"
     
@@ -321,7 +426,7 @@ class EventAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         qs = qs.select_related('owner')
-        qs = qs.prefetch_related('event_participants', 'online_sessions')
+        qs = qs.prefetch_related('event_participants', 'online_sessions', 'offline_sessions')
         return qs
 
 
@@ -331,7 +436,8 @@ class OnlineEventInfoAdmin(admin.ModelAdmin):
     list_display = [
         'session_name', 'event_safe_link', 'start_time_display',
         'end_time_display', 'duration_display', 'status_display',
-        'is_ongoing_display', 'platform_display', 'is_active_display'
+        'is_ongoing_display', 'platform_display', 'participant_count',
+        'is_active_display'
     ]
     
     list_filter = [
@@ -472,6 +578,21 @@ class OnlineEventInfoAdmin(admin.ModelAdmin):
         }
         return platforms.get(obj.platform, obj.get_platform_display())
     
+    @admin.display(description='Участников')
+    def participant_count(self, obj):
+        try:
+            count = obj.attendances.count()
+            if count > 0:
+                url = f'/admin/events/sessionattendance/?session__id={obj.id}'
+                return format_html(
+                    '<a href="{}">{}</a>',
+                    url,
+                    count
+                )
+            return count
+        except Exception:
+            return "0"
+    
     @admin.display(description='Активна')
     def is_active_display(self, obj):
         if obj.is_active:
@@ -500,6 +621,179 @@ class OnlineEventInfoAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         qs = qs.select_related('event', 'event__owner')
         qs = qs.annotate(attendance_count=Count('attendances'))
+        return qs
+
+
+@admin.register(OfflineSessionsInfo)
+class OfflineSessionsInfoAdmin(admin.ModelAdmin):
+    """Админ-класс для оффлайн-сессий"""
+    list_display = [
+        'session_name', 'event_safe_link', 'start_time_display',
+        'end_time_display', 'duration_display', 'status_display',
+        'is_ongoing_display', 'full_location_display', 'is_active_display'
+    ]
+    
+    list_filter = [
+        'status', 'is_active', IsOngoingFilter,
+        'start_time', 'event'
+    ]
+    
+    search_fields = [
+        'session_name', 'session_notes', 'event__name',
+        'address', 'room', 'event__owner__username'
+    ]
+    
+    list_select_related = ['event', 'event__owner']
+    
+    date_hierarchy = 'start_time'
+    
+    # Методы для readonly_fields (detail view) - русские отображения
+    @admin.display(description='Идет сейчас')
+    def is_ongoing_readonly(self, obj):
+        if obj.is_ongoing:
+            return format_html('<span style="color: green;">✓ Да</span>')
+        return format_html('<span style="color: gray;">✗ Нет</span>')
+    
+    @admin.display(description='Запланирована')
+    def is_upcoming_readonly(self, obj):
+        if obj.is_upcoming:
+            return format_html('<span style="color: blue;">✓ Да</span>')
+        return format_html('<span style="color: gray;">✗ Нет</span>')
+    
+    @admin.display(description='Завершена')
+    def is_past_readonly(self, obj):
+        if obj.is_past:
+            return format_html('<span style="color: gray;">✓ Да</span>')
+        return format_html('<span style="color: blue;">✗ Нет</span>')
+    
+    readonly_fields = [
+        'created_at', 'updated_at', 'duration_minutes',
+        'is_ongoing_readonly', 'is_upcoming_readonly', 'is_past_readonly'
+    ]
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('event', 'session_name', 'session_notes')
+        }),
+        ('Время проведения', {
+            'fields': ('start_time', 'end_time', 'duration_minutes')
+        }),
+        ('Местоположение', {
+            'fields': ('address', 'room')
+        }),
+        ('Статус и ограничения', {
+            'fields': ('status', 'max_participants', 'is_active')
+        }),
+        ('Системная информация', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+        ('Статус сессии', {
+            'fields': ('is_ongoing_readonly', 'is_upcoming_readonly', 'is_past_readonly'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['start_selected', 'complete_selected', 'cancel_selected']
+    
+    # Исправленный метод event_link
+    @admin.display(description='Событие', ordering='event__name')
+    def event_safe_link(self, obj):
+        if not obj.event:
+            return "—"
+        
+        try:
+            url = f'/admin/events/event/{obj.event.id}/change/'
+            return format_html(
+                '<a href="{}">{}</a>',
+                url,
+                obj.event.name
+            )
+        except Exception:
+            return str(obj.event)
+    
+    @admin.display(description='Начало', ordering='start_time')
+    def start_time_display(self, obj):
+        return obj.start_time.strftime('%d.%m.%Y %H:%M') if obj.start_time else "—"
+    
+    @admin.display(description='Окончание')
+    def end_time_display(self, obj):
+        if obj.end_time:
+            return obj.end_time.strftime('%d.%m.%Y %H:%M')
+        return '—'
+    
+    @admin.display(description='Длительность')
+    def duration_display(self, obj):
+        if obj.duration_minutes:
+            hours = obj.duration_minutes // 60
+            minutes = obj.duration_minutes % 60
+            if hours > 0:
+                return f'{hours}ч {minutes}мин'
+            return f'{minutes} мин'
+        return '—'
+    
+    @admin.display(description='Статус')
+    def status_display(self, obj):
+        colors = {
+            'scheduled': 'blue',
+            'ongoing': 'green',
+            'completed': 'gray',
+            'cancelled': 'red',
+        }
+        color = colors.get(obj.status, 'black')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    
+    @admin.display(description='Идет сейчас')
+    def is_ongoing_display(self, obj):
+        if obj.is_ongoing:
+            return format_html(
+                '<span style="color: green;">✓ Идет</span>'
+            )
+        return format_html(
+            '<span style="color: gray;">— Не идет</span>'
+        )
+    
+    @admin.display(description='Место проведения')
+    def full_location_display(self, obj):
+        location = obj.full_location
+        if location:
+            return format_html(
+                '<span style="color: #555;">📍 {}</span>',
+                location
+            )
+        return '—'
+    
+    @admin.display(description='Активна')
+    def is_active_display(self, obj):
+        if obj.is_active:
+            return format_html('<span style="color: green;">✓ Да</span>')
+        return format_html('<span style="color: red;">✗ Нет</span>')
+    
+    # Действия
+    @admin.action(description='Начать выбранные сессии')
+    def start_selected(self, request, queryset):
+        now = timezone.now()
+        updated = queryset.update(status='ongoing', start_time=now)
+        self.message_user(request, f'Начато {updated} сессий')
+    
+    @admin.action(description='Завершить выбранные сессии')
+    def complete_selected(self, request, queryset):
+        now = timezone.now()
+        updated = queryset.update(status='completed', end_time=now)
+        self.message_user(request, f'Завершено {updated} сессий')
+    
+    @admin.action(description='Отменить выбранные сессии')
+    def cancel_selected(self, request, queryset):
+        updated = queryset.update(status='cancelled')
+        self.message_user(request, f'Отменено {updated} сессий')
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        qs = qs.select_related('event', 'event__owner')
         return qs
 
 
@@ -587,7 +881,6 @@ class EventParticipantAdmin(admin.ModelAdmin):
     def role_display(self, obj):
         colors = {
             'participant': 'blue',
-            'speaker': 'green',
             'organizer': 'orange',
             'volunteer': 'purple',
         }

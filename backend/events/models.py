@@ -134,7 +134,6 @@ class EventParticipant(models.Model):
     """
     ROLE_CHOICES = [
         ('participant', _('Участник')),
-        ('speaker', _('Докладчик')),
         ('organizer', _('Организатор')),
         ('volunteer', _('Волонтер')),
     ]
@@ -142,13 +141,15 @@ class EventParticipant(models.Model):
     event = models.ForeignKey(
         Event,
         on_delete=models.CASCADE,
-        related_name='event_participants'
+        related_name='event_participants',
+        verbose_name=_('Событие')  
     )
     
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='event_participations'
+        related_name='event_participations',
+        verbose_name=_('Пользователь') 
     )
     
     registered_at = models.DateTimeField(
@@ -177,6 +178,7 @@ class EventParticipant(models.Model):
             models.Index(fields=['event', 'user']),
             models.Index(fields=['is_confirmed']),
         ]
+    
     
     def __str__(self):
         # Безопасный метод __str__ для EventParticipant
@@ -468,10 +470,8 @@ class SessionAttendance(models.Model):
         ]
     
     def __str__(self):
-        # Безопасный метод __str__ для SessionAttendance
         participant_display = "Не указан"
         if self.participant:
-            # Проверяем различные возможные поля пользователя
             if hasattr(self.participant, 'email'):
                 participant_display = self.participant.email
             elif hasattr(self.participant, 'get_full_name') and self.participant.get_full_name():
@@ -580,7 +580,6 @@ class SessionMaterial(models.Model):
         ]
     
     def __str__(self):
-        # Безопасный метод __str__ для SessionMaterial
         session_display = self.session.session_name if self.session else "Не указана"
         return f"{self.title} - {session_display}"
     
@@ -592,3 +591,190 @@ class SessionMaterial(models.Model):
         elif self.file_url:
             return f"Ссылка: {self.file_url[:50]}..."
         return _("Нет файла")
+    
+class OfflineSessionsInfo(models.Model):
+    """
+    Модель для хранения информации об оффлайн-сессиях/мероприятиях.
+    """
+    
+    STATUS_CHOICES = [
+        ('scheduled', _('Запланирована')),
+        ('ongoing', _('В процессе')),
+        ('completed', _('Завершена')),
+        ('cancelled', _('Отменена')),
+    ]
+    
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='offline_sessions',
+        verbose_name=_('Событие'),
+        help_text=_('Основное событие, к которому относится эта сессия')
+    )
+    
+    session_name = models.CharField(
+        max_length=255,
+        verbose_name=_('Название сессии'),
+        help_text=_('Название оффлайн-сессии или мероприятия')
+    )
+    
+    start_time = models.DateTimeField(
+        verbose_name=_('Время начала'),
+        help_text=_('Дата и время начала сессии')
+    )
+    
+    end_time = models.DateTimeField(
+        verbose_name=_('Время окончания'),
+        help_text=_('Дата и время окончания сессии'),
+        blank=True,
+        null=True
+    )
+    
+    session_notes = models.TextField(
+        verbose_name=_('Заметки к сессии'),
+        help_text=_('Дополнительная информация, инструкции, заметки'),
+        blank=True,
+        null=True
+    )
+    
+    address = models.CharField(
+        max_length=500,
+        verbose_name=_('Адрес'),
+        help_text=_('Полный адрес проведения мероприятия'),
+        blank=True,
+        null=True
+    )
+    
+    room = models.CharField(
+        max_length=100,
+        verbose_name=_('Кабинет/аудитория'),
+        help_text=_('Номер кабинета, аудитории или зала'),
+        blank=True,
+        null=True
+    )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Дата создания')
+    )
+    
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_('Дата обновления')
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_('Активна')
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='scheduled',
+        verbose_name=_('Статус сессии')
+    )
+    
+    max_participants = models.PositiveIntegerField(
+        verbose_name=_('Максимум участников'),
+        blank=True,
+        null=True,
+        help_text=_('Максимальное количество участников для этой сессии'),
+        validators=[MinValueValidator(1)]
+    )
+    
+    class Meta:
+        verbose_name = _('Оффлайн-сессия')
+        verbose_name_plural = _('Оффлайн-сессии')
+        ordering = ['start_time', 'session_name']
+        indexes = [
+            models.Index(fields=['event', 'start_time']),
+            models.Index(fields=['status']),
+            models.Index(fields=['start_time']),
+            models.Index(fields=['event', 'status']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(end_time__gt=models.F('start_time')) | models.Q(end_time__isnull=True),
+                name='offline_end_time_after_start_time'
+            ),
+        ]
+    
+    def __str__(self):
+        return f"{self.session_name} ({self.event.name})"
+    
+    @property
+    def full_location(self):
+        """Полное местоположение с адресом и кабинетом"""
+        location_parts = []
+        if self.address:
+            location_parts.append(self.address)
+        if self.room:
+            location_parts.append(_("каб. ") + self.room)
+        return ", ".join(location_parts) if location_parts else _("Место не указано")
+    
+    @property
+    def duration_minutes(self):
+        """Продолжительность сессии в минутах"""
+        if self.start_time and self.end_time:
+            duration = self.end_time - self.start_time
+            return int(duration.total_seconds() / 60)
+        return None
+    
+    @property
+    def is_ongoing(self):
+        """Проверяет, идет ли сессия сейчас"""
+        if not self.start_time or self.status == 'cancelled' or not self.is_active:
+            return False
+        
+        now = timezone.now()
+        if self.start_time <= now:
+            if self.end_time:
+                return now <= self.end_time
+            return True
+        return False
+    
+    @property
+    def is_upcoming(self):
+        """Проверяет, запланирована ли сессия на будущее"""
+        if not self.start_time or not self.is_active:
+            return False
+        return self.start_time > timezone.now() and self.status == 'scheduled'
+    
+    @property
+    def is_past(self):
+        """Проверяет, завершилась ли сессия"""
+        if not self.start_time or not self.is_active:
+            return False
+        
+        if self.end_time:
+            return self.end_time < timezone.now()
+        return self.start_time < (timezone.now() - timezone.timedelta(hours=1))
+    
+    def clean(self):
+        """Валидация модели"""
+        if self.end_time and self.start_time and self.end_time <= self.start_time:
+            raise ValidationError({
+                'end_time': _('Время окончания должно быть позже времени начала')
+            })
+        
+        if self.start_time and self.start_time < timezone.now() and not self.pk:
+            raise ValidationError({
+                'start_time': _('Время начала не может быть в прошлом для новых сессий')
+            })
+        
+        super().clean()
+    
+    def save(self, *args, **kwargs):
+        """Переопределение save для автоматического обновления статуса"""
+        if self.start_time and self.end_time:
+            now = timezone.now()
+            if now < self.start_time and self.status != 'cancelled':
+                self.status = 'scheduled'
+            elif self.start_time <= now <= self.end_time and self.status != 'cancelled':
+                self.status = 'ongoing'
+            elif now > self.end_time and self.status not in ['completed', 'cancelled']:
+                self.status = 'completed'
+        
+        self.full_clean()
+        super().save(*args, **kwargs)
