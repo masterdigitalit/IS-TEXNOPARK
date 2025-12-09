@@ -14,14 +14,14 @@ router.register(r'', UserViewSet, basename='user')
 
 urlpatterns = [
     # JWT аутентификация (стандартные эндпоинты)
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
-    path('token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    path('auth/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
     
     # Кастомный login (если хотите)
-    path('login/', UserLoginView.as_view(), name='user-login'),
+    path('auth/login/', UserLoginView.as_view(), name='user-login'),
     
     # Включение всех эндпоинтов UserViewSet
-    path('', include(router.urls)),
+    path('users/', include(router.urls)),
 ]

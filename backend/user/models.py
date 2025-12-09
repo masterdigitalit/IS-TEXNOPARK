@@ -207,7 +207,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         if self.first_name:
             short_name.append(self.first_name)
         if self.middle_name:
-            short_name.append(self.middle_name)
+            short_name.append(self.last_name)
         return " ".join(short_name) if short_name else ""
     
     @property

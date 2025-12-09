@@ -45,13 +45,62 @@ INSTALLED_APPS = [
     # Ваши приложения
     'user',  # или 'users', в зависимости от названия вашего приложения
     'events',
+    'notifications'
 ]
+
+
+
+
+
+
+CORS_ALLOW_ALL_ORIGINS = True  # Для разработки
+
+# ИЛИ если хотите более безопасную настройку:
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+# ]
+
+CORS_ALLOW_CREDENTIALS = True
+
+
+
+
+
+
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Разрешаем все методы
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+
+
 
 # Укажите Django использовать вашу кастомную модель User
 AUTH_USER_MODEL = 'user.User'
 
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
+    'corsheaders.middleware.CorsMiddleware',  # ДОЛЖЕН БЫТЬ САМЫМ ПЕРВЫМ!
+    'django.middleware.security.SecurityMiddleware',
+
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     # "django.middleware.csrf.CsrfViewMiddleware",
@@ -86,8 +135,8 @@ WSGI_APPLICATION = "config.wsgi.application"
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
+        # 'rest_framework.authentication.SessionAuthentication',
+        # 'rest_framework.authentication.BasicAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
