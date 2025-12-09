@@ -1,6 +1,6 @@
 @import "../styles/globals.css";
 
-@layer base {
+/* @layer base {
   :root {
     @apply font-sans;
   }
@@ -8,10 +8,10 @@
   body {
     @apply grid place-items-center min-w-[320px] min-h-screen relative m-0 bg-background text-foreground;
   }
-}
+} */
 
 /* cool Bun background animation 😎 */
-body::before {
+/* body::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -22,9 +22,9 @@ body::before {
   transform: rotate(-12deg) scale(1.35);
   animation: slide 30s linear infinite;
   pointer-events: none;
-}
+} */
 
-@keyframes slide {
+/* @keyframes slide {
   from {
     background-position: 0 0;
   }
@@ -48,4 +48,24 @@ body::before {
   ::after {
     animation: none !important;
   }
+} */
+
+
+
+/* Добавьте в index.css или создайте отдельный файл */
+input[type="checkbox"]:checked ~ .checkmark {
+  background-color: #3b82f6;
+}
+
+input[type="checkbox"]:checked ~ .checkmark:after {
+  display: block;
+}
+
+.toggle-checkbox:checked {
+  right: 0;
+  border-color: #10b981;
+}
+
+.toggle-checkbox:checked + .toggle-label {
+  background-color: #10b981;
 }

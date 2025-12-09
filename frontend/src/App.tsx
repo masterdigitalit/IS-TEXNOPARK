@@ -1,39 +1,136 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { APITester } from "./APITester";
-import "./index.css";
+// src/App.tsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import HomePage from "./components/pages/HomePage";
+import { LoginForm } from "./components/auth/LoginForm";
+import { RegisterForm } from "./components/auth/RegisterForm";
+import Navbar from "./components/layout/Navbar";
+import { ProtectedRoute } from "./components/auth/ProtectedRoute";
+import { RoleBasedRedirect } from "./components/auth/RoleBasedRedirect";
+import ProfilePage from "./components/profile/ProfilePage";
+import AdminDashboard from "./components/admin/AdminDashboard";
+import StudentDashboard from "./components/student/StudentDashboard";
+import { UserList } from "./components/admin/users/UsersPage";
+import { UserProfilePage } from "./components/admin/users/id/UserEditPage";
+// import TeacherDashboard from './components/dashboards/TeacherDashboard';
+// import RefereeDashboard from './components/dashboards/RefereeDashboard';
 
-import logo from "./logo.svg";
-import reactLogo from "./react.svg";
+// Временные компоненты (создайте их позже)
+const TeacherDashboard = () => (
+	<div className="p-6">
+		<h1 className="text-3xl font-bold mb-6">Панель учителя</h1>
+		<p>Здесь будет интерфейс для учителей</p>
+	</div>
+);
 
-export function App() {
-  return (
-    <div className="container mx-auto p-8 text-center relative z-10">
-      <div className="flex justify-center items-center gap-8 mb-8">
-        <img
-          src={logo}
-          alt="Bun Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#646cffaa] scale-120"
-        />
-        <img
-          src={reactLogo}
-          alt="React Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#61dafbaa] [animation:spin_20s_linear_infinite]"
-        />
-      </div>
-      <Card>
-        <CardHeader className="gap-4">
-          <CardTitle className="text-3xl font-bold">Bun + React</CardTitle>
-          <CardDescription>
-            Edit <code className="rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono">src/App.tsx</code> and save to
-            test HMR
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <APITester />
-        </CardContent>
-      </Card>
-    </div>
-  );
+const RefereeDashboard = () => (
+	<div className="p-6">
+		<h1 className="text-3xl font-bold mb-6">Панель судьи</h1>
+		<p>Здесь будет интерфейс для судей</p>
+	</div>
+);
+
+function App() {
+	return (
+		<Router>
+			<AuthProvider>
+				<div className="min-h-screen bg-gray-50">
+					<Navbar />
+					<Routes>
+						{/* Публичные роуты */}
+						<Route path="/" element={<HomePage />} />
+						<Route path="/login" element={<LoginForm />} />
+						<Route path="/register" element={<RegisterForm />} />
+						<Route path="/profile" element={<ProfilePage />} />
+
+						{/* Редирект после логина */}
+						<Route
+							path="/login-redirect"
+							element={
+								<ProtectedRoute>
+									<RoleBasedRedirect />
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* Ролевые роуты */}
+						<Route
+							path="/admin/dashboard"
+							element={
+								<ProtectedRoute requiredRole="admin">
+									<AdminDashboard />
+								</ProtectedRoute>
+							}
+						/>
+						<Route
+							path="/admin/users"
+							element={
+								<ProtectedRoute requiredRole="admin">
+									<UserList />
+								</ProtectedRoute>
+							}
+						/>
+						<Route
+							path="/admin/users/:id"
+							element={
+								<ProtectedRoute requiredRole="admin">
+									<UserProfilePage />
+								</ProtectedRoute>
+							}
+						/>
+
+						<Route
+							path="/admin/*"
+							element={
+								<ProtectedRoute requiredRole="admin">
+									<AdminDashboard />
+								</ProtectedRoute>
+							}
+						/>
+
+						<Route
+							path="/student/dashboard"
+							element={
+								<ProtectedRoute requiredRole="student">
+									<StudentDashboard />
+								</ProtectedRoute>
+							}
+						/>
+
+						<Route
+							path="/teacher/dashboard"
+							element={
+								<ProtectedRoute requiredRole="teacher">
+									<TeacherDashboard />
+								</ProtectedRoute>
+							}
+						/>
+
+						<Route
+							path="/referee/dashboard"
+							element={
+								<ProtectedRoute requiredRole="referee">
+									<RefereeDashboard />
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* 404 страница */}
+						<Route
+							path="*"
+							element={
+								<div className="container mx-auto px-4 py-20 text-center">
+									<h1 className="text-4xl font-bold mb-4">404</h1>
+									<p className="text-gray-600 mb-8">Страница не найдена</p>
+								</div>
+							}
+						/>
+					</Routes>
+				</div>
+			</AuthProvider>
+		</Router>
+	);
 }
 
 export default App;
