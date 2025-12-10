@@ -88,36 +88,65 @@ class Event(models.Model):
         return f"{self.name} ({self.get_status_display()})"
     
     @property
-    def is_open(self):
-        """Проверяет, открыто ли еще событие для регистрации/участия"""
-        if not self.closes_at:
-            return True
-        return timezone.now() < self.closes_at
-    
-    @property
     def has_online_sessions(self):
-        """Есть ли у события онлайн-сессии"""
-        return self.online_sessions.exists()
+        """Есть ли активные онлайн сессии у события"""
+        return self.online_sessions.filter(is_active=True).exists()
     
     @property
-    def upcoming_online_sessions(self):
-        """Будущие онлайн-сессии"""
-        return self.online_sessions.filter(
-            start_time__gt=timezone.now(),
-            status='scheduled',
-            is_active=True
-        )
+    def has_offline_sessions(self):
+        """Есть ли активные офлайн сессии у события"""
+        return self.offline_sessions.filter(is_active=True).exists()
     
     @property
-    def ongoing_online_sessions(self):
-        """Текущие онлайн-сессии"""
-        now = timezone.now()
+    def has_active_online_sessions(self):
+        """Есть ли активные онлайн сессии (сейчас идущие или будущие)"""
         return self.online_sessions.filter(
-            start_time__lte=now,
-            end_time__gte=now,
-            status='ongoing',
-            is_active=True
-        )
+            is_active=True,
+            status__in=['scheduled', 'ongoing']
+        ).exists()
+    
+    @property
+    def has_active_offline_sessions(self):
+        """Есть ли активные офлайн сессии (сейчас идущие или будущие)"""
+        return self.offline_sessions.filter(
+            is_active=True,
+            status__in=['scheduled', 'ongoing']
+        ).exists()
+    
+    @property
+    def online_sessions_count(self):
+        """Количество активных онлайн сессий"""
+        return self.online_sessions.filter(is_active=True).count()
+    
+    @property
+    def offline_sessions_count(self):
+        """Количество активных офлайн сессий"""
+        return self.offline_sessions.filter(is_active=True).count()
+    
+    @property
+    def active_online_sessions_count(self):
+        """Количество активных онлайн сессий (сейчас идущие или будущие)"""
+        return self.online_sessions.filter(
+            is_active=True,
+            status__in=['scheduled', 'ongoing']
+        ).count()
+    
+    @property
+    def active_offline_sessions_count(self):
+        """Количество активных офлайн сессий (сейчас идущие или будущие)"""
+        return self.offline_sessions.filter(
+            is_active=True,
+            status__in=['scheduled', 'ongoing']
+        ).count()
+    
+    @property
+    def is_open(self):
+        """Открыто ли событие для регистрации"""
+        if not self.is_active or self.status != 'published':
+            return False
+        if self.closes_at:
+            return timezone.now() <= self.closes_at
+        return True
     
     def clean(self):
         """Валидация модели"""
