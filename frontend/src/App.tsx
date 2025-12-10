@@ -13,6 +13,7 @@ import AdminDashboard from "./components/admin/AdminDashboard";
 import StudentDashboard from "./components/student/StudentDashboard";
 import { UserList } from "./components/admin/users/UsersPage";
 import { UserProfilePage } from "./components/admin/users/id/UserEditPage";
+import { EventList } from "./components/admin/events/EventList";
 // import TeacherDashboard from './components/dashboards/TeacherDashboard';
 // import RefereeDashboard from './components/dashboards/RefereeDashboard';
 
@@ -63,6 +64,15 @@ function App() {
 								</ProtectedRoute>
 							}
 						/>
+            	<Route
+							path="/admin/events"
+							element={
+								<ProtectedRoute requiredRole="admin">
+									<EventList />
+								</ProtectedRoute>
+							}
+						/>
+            
 						<Route
 							path="/admin/users"
 							element={

@@ -394,7 +394,7 @@ export const UserProfilePage: React.FC = () => {
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <button
-            onClick={() => navigate('/admin/users')}
+            onClick={() => navigate(-1)}
             className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeftIcon className="h-5 w-5 mr-2" />

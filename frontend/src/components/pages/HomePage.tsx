@@ -211,7 +211,7 @@ const HomePage = () => {
                   Решение
                 </div>
                 <h2 className="text-3xl font-bold text-gray-900 mb-6">
-                  Navigator — цифровая платформа для всех участников
+                  Навигатор — цифровая платформа для всех участников
                 </h2>
                 <ul className="space-y-4">
                   <li className="flex items-start">
@@ -340,7 +340,7 @@ const HomePage = () => {
             </h2>
             
             <p className="text-xl text-blue-200 mb-10 max-w-2xl mx-auto">
-              Присоединяйтесь к школам, которые уже используют Navigator для организации успешных мероприятий
+              Присоединяйтесь к школам, которые уже используют Навигатор для организации успешных мероприятий
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -378,7 +378,7 @@ const HomePage = () => {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="mb-6 md:mb-0">
-              <div className="text-2xl font-bold mb-2">Navigator</div>
+              <div className="text-2xl font-bold mb-2">Навигатор</div>
               <p className="text-gray-400">Информационная система для конференций</p>
               <p className="text-gray-400 text-sm mt-4">© 2025 IS-TEXNOPARK. Все права защищены.</p>
             </div>

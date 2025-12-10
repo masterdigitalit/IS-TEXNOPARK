@@ -55,11 +55,11 @@ const Navbar = () => {
       admin: [
         { name: 'Панель управления', path: '/admin/dashboard', icon: <Cog6ToothIcon className="h-5 w-5" /> },
         { name: 'Пользователи', path: '/admin/users', icon: <UserCircleIcon className="h-5 w-5" /> },
-        { name: 'Конференции', path: '/admin/conferences', icon: <AcademicCapIcon className="h-5 w-5" /> },
+        { name: 'Конференции', path: '/admin/events', icon: <AcademicCapIcon className="h-5 w-5" /> },
       ],
       teacher: [
         { name: 'Мои классы', path: '/teacher/dashboard', icon: <AcademicCapIcon className="h-5 w-5" /> },
-        { name: 'Конференции', path: '/teacher/conferences', icon: <ClipboardDocumentCheckIcon className="h-5 w-5" /> },
+        { name: 'Конференции', path: '/teacher/events', icon: <ClipboardDocumentCheckIcon className="h-5 w-5" /> },
       ],
       referee: [
         { name: 'Оценивание', path: '/referee/dashboard', icon: <ClipboardDocumentCheckIcon className="h-5 w-5" /> },
@@ -113,7 +113,7 @@ const Navbar = () => {
                 <span className="text-white font-bold text-sm">N</span>
               </div>
               <span className="text-xl font-bold text-gray-800 hidden md:inline">
-                Navigator
+                Навигатор
               </span>
             </Link>
 
