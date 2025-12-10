@@ -53,22 +53,12 @@ INSTALLED_APPS = [
 
 
 
-CORS_ALLOW_ALL_ORIGINS = True  # Для разработки
+CORS_ALLOW_ALL_ORIGINS = True
 
-# ИЛИ если хотите более безопасную настройку:
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-# ]
-
+# Разрешаем credentials для JWT
 CORS_ALLOW_CREDENTIALS = True
 
-
-
-
-
-
-
+# Добавляем заголовки
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -81,7 +71,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Разрешаем все методы
+# Убедитесь, что разрешены все методы
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -91,7 +81,9 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-
+# Если проблема остается, попробуйте добавить
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
+CORS_PREFLIGHT_MAX_AGE = 86400
 
 
 # Укажите Django использовать вашу кастомную модель User

@@ -14,6 +14,7 @@ urlpatterns = [
     
     # API endpoints
     path('api/v1/', include('user.urls')),
+    path('api/v1/', include('events.urls')),
     path('api/v1/user/notifications/', include('notifications.urls')),
     # path('api/v1/events/', include('events.urls')),
     
