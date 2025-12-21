@@ -23,7 +23,7 @@ class Event(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='events',
-        verbose_name=_('Организатор'),
+        verbose_name=_('Владелец'),
     )
     
     name = models.CharField(
@@ -73,6 +73,11 @@ class Event(models.Model):
         verbose_name=_('Активно')
     )
     
+    is_private = models.BooleanField(
+        default=False,
+        verbose_name=_('Приватное мероприятие')
+    )
+    
     class Meta:
         verbose_name = _('Событие')
         verbose_name_plural = _('События')
@@ -82,6 +87,7 @@ class Event(models.Model):
             models.Index(fields=['created_at']),
             models.Index(fields=['closes_at']),
             models.Index(fields=['owner', 'status']),
+            models.Index(fields=['is_private']),
         ]
     
     def __str__(self):
@@ -155,6 +161,22 @@ class Event(models.Model):
                 'closes_at': _('Дата закрытия должна быть в будущем')
             })
         super().clean()
+     
+    def save(self, *args, **kwargs):
+        """Переопределение save для автоматического добавления создателя как организатора"""
+        is_new = self.pk is None  # Проверяем, новый ли это объект
+        super().save(*args, **kwargs)  # Сначала сохраняем событие
+        
+        # Если это новое событие, добавляем владельца как организатора
+        if is_new and self.owner:
+            EventParticipant.objects.get_or_create(
+                event=self,
+                user=self.owner,
+                defaults={
+                    'role': 'owner',
+                    'is_confirmed': True
+                }
+            )
 
 
 class EventParticipant(models.Model):
@@ -163,8 +185,8 @@ class EventParticipant(models.Model):
     """
     ROLE_CHOICES = [
         ('participant', _('Участник')),
-        ('organizer', _('Организатор')),
-        ('volunteer', _('Волонтер')),
+        ('owner', _('Владелец')),
+        ('referee', _('Судья')),
     ]
     
     event = models.ForeignKey(
