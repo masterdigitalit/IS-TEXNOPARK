@@ -1,4 +1,3 @@
-# events/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -79,9 +78,10 @@ class EventSerializer(serializers.ModelSerializer):
     is_open = serializers.BooleanField(read_only=True)
     has_online_sessions = serializers.BooleanField(read_only=True)
     has_offline_sessions = serializers.BooleanField(read_only=True)
-    online_sessions_count = serializers.IntegerField(read_only=True)  # Добавлено read_only=True
-    offline_sessions_count = serializers.IntegerField(read_only=True)  # Добавлено read_only=True
+    online_sessions_count = serializers.IntegerField(read_only=True)
+    offline_sessions_count = serializers.IntegerField(read_only=True)
     participants_count = serializers.SerializerMethodField()
+    is_private = serializers.BooleanField(default=False)
     
     # Краткая информация о сессиях
     upcoming_online_sessions = serializers.SerializerMethodField()
@@ -94,7 +94,7 @@ class EventSerializer(serializers.ModelSerializer):
             'created_at', 'closes_at', 'image_url', 'updated_at', 'is_active',
             'is_open', 'has_online_sessions', 'has_offline_sessions',
             'online_sessions_count', 'offline_sessions_count', 'participants_count',
-            'upcoming_online_sessions', 'upcoming_offline_sessions'
+            'upcoming_online_sessions', 'upcoming_offline_sessions', 'is_private'
         ]
         read_only_fields = [
             'created_at', 'updated_at', 'owner', 'is_open',
@@ -112,7 +112,7 @@ class EventSerializer(serializers.ModelSerializer):
             is_active=True,
             status='scheduled',
             start_time__gt=timezone.now()
-        )[:3]  # Ограничиваем количество для списка
+        )[:3]
         return OnlineSessionSimpleSerializer(sessions, many=True).data
     
     def get_upcoming_offline_sessions(self, obj):
@@ -121,12 +121,11 @@ class EventSerializer(serializers.ModelSerializer):
             is_active=True,
             status='scheduled',
             start_time__gt=timezone.now()
-        )[:3]  # Ограничиваем количество для списка
+        )[:3]
         return OfflineSessionSimpleSerializer(sessions, many=True).data
     
     def validate(self, data):
         """Валидация данных события"""
-        # Проверяем, что дата закрытия в будущем
         closes_at = data.get('closes_at')
         if closes_at and closes_at <= serializers.DateTimeField().to_representation(
             serializers.DateTimeField().to_internal_value(data.get('created_at', serializers.DateTimeField().to_internal_value('now')))
@@ -141,6 +140,7 @@ class EventSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user:
             validated_data['owner'] = request.user
+        # Теперь участника создаст метод save() модели Event
         return super().create(validated_data)
 
 
@@ -176,14 +176,12 @@ class EventParticipantSerializer(serializers.ModelSerializer):
         event = data.get('event')
         user = data.get('user')
         
-        # Проверяем, что пользователь еще не участвует в событии
-        if self.instance is None:  # Только при создании
+        if self.instance is None:
             if EventParticipant.objects.filter(event=event, user=user).exists():
                 raise serializers.ValidationError({
                     'user': 'Этот пользователь уже участвует в данном событии'
                 })
         
-        # Проверяем, что событие активно
         if event and not event.is_active:
             raise serializers.ValidationError({
                 'event': 'Событие не активно'
@@ -232,7 +230,6 @@ class OnlineEventInfoSerializer(serializers.ModelSerializer):
                 'end_time': 'Время окончания должно быть позже времени начала'
             })
         
-        # Проверяем, что время начала в будущем для новых сессий
         if self.instance is None and start_time and start_time < timezone.now():
             raise serializers.ValidationError({
                 'start_time': 'Время начала не может быть в прошлом для новых сессий'
@@ -271,14 +268,12 @@ class SessionAttendanceSerializer(serializers.ModelSerializer):
         session = data.get('session')
         participant = data.get('participant')
         
-        # Проверяем, что пользователь еще не зарегистрирован на сессию
-        if self.instance is None:  # Только при создании
+        if self.instance is None:
             if SessionAttendance.objects.filter(session=session, participant=participant).exists():
                 raise serializers.ValidationError({
                     'participant': 'Этот пользователь уже зарегистрирован на данную сессию'
                 })
         
-        # Проверяем лимит участников
         if session and session.max_participants:
             current_count = session.attendances.count()
             if current_count >= session.max_participants:
@@ -358,7 +353,6 @@ class OfflineSessionsInfoSerializer(serializers.ModelSerializer):
                 'end_time': 'Время окончания должно быть позже времени начала'
             })
         
-        # Проверяем, что время начала в будущем для новых сессий
         if self.instance is None and start_time and start_time < timezone.now():
             raise serializers.ValidationError({
                 'start_time': 'Время начала не может быть в прошлом для новых сессий'

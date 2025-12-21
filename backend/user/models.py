@@ -77,10 +77,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Роль пользователя
     ROLE_CHOICES = [
         ('admin', 'Админ'),
-        ('student', 'Студент'),
-        ('teacher', 'Учитель'),
-        ('referee', 'Судья'),
-  
+        ('user', 'Пользователь')
+
     ]
     
     role = models.CharField(

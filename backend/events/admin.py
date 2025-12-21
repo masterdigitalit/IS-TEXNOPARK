@@ -96,6 +96,25 @@ class IsOpenFilter(admin.SimpleListFilter):
         return queryset
 
 
+class IsPrivateFilter(admin.SimpleListFilter):
+    """Фильтр для событий (приватное/публичное)"""
+    title = 'Тип мероприятия'
+    parameter_name = 'is_private'
+    
+    def lookups(self, request, model_admin):
+        return (
+            ('private', 'Приватное'),
+            ('public', 'Публичное'),
+        )
+    
+    def queryset(self, request, queryset):
+        if self.value() == 'private':
+            return queryset.filter(is_private=True)
+        if self.value() == 'public':
+            return queryset.filter(is_private=False)
+        return queryset
+
+
 class IsOngoingFilter(admin.SimpleListFilter):
     """Фильтр для сессий (идет сейчас/нет)"""
     title = 'Идет сейчас'
@@ -150,13 +169,14 @@ class SessionTypeFilter(admin.SimpleListFilter):
 class EventAdmin(admin.ModelAdmin):
     """Админ-класс для событий"""
     list_display = [
-        'name', 'owner_safe_link', 'status_display', 'is_open_display',
-        'participant_count', 'online_sessions_count', 'offline_sessions_count',
-        'total_sessions_count', 'created_at_display', 'is_active_display'
+        'name', 'owner_safe_link', 'status_display', 'is_private_display',
+        'is_open_display', 'participant_count', 'online_sessions_count', 
+        'offline_sessions_count', 'total_sessions_count', 'created_at_display', 
+        'is_active_display'
     ]
     
     list_filter = [
-        'status', 'is_active', IsOpenFilter, SessionTypeFilter,
+        'status', 'is_active', IsPrivateFilter, IsOpenFilter, SessionTypeFilter,
         'created_at', 'owner'
     ]
     
@@ -176,13 +196,19 @@ class EventAdmin(admin.ModelAdmin):
             return format_html('<span style="color: green;">✓ Да</span>')
         return format_html('<span style="color: red;">✗ Нет</span>')
     
+    @admin.display(description='Приватное')
+    def is_private_readonly(self, obj):
+        if obj.is_private:
+            return format_html('<span style="color: purple;">✓ Да</span>')
+        return format_html('<span style="color: green;">✗ Нет</span>')
+    
     @admin.display(description='Есть онлайн сессии')
     def has_online_sessions_readonly(self, obj):
         if obj.has_online_sessions:
             return format_html('<span style="color: green;">✓ Да</span>')
         return format_html('<span style="color: red;">✗ Нет</span>')
     
-    @admin.display(description='Есть оффлайн сессии')
+    @admin.display(description='Есть офлайн сессии')
     def has_offline_sessions_readonly(self, obj):
         if obj.offline_sessions.exists():
             return format_html('<span style="color: green;">✓ Да</span>')
@@ -238,10 +264,10 @@ class EventAdmin(admin.ModelAdmin):
     
     readonly_fields = [
         'created_at', 'updated_at', 
-        'is_open_readonly', 'has_online_sessions_readonly',
-        'has_offline_sessions_readonly', 'upcoming_online_sessions_readonly',
-        'ongoing_online_sessions_readonly', 'upcoming_offline_sessions_readonly',
-        'ongoing_offline_sessions_readonly'
+        'is_open_readonly', 'is_private_readonly',
+        'has_online_sessions_readonly', 'has_offline_sessions_readonly', 
+        'upcoming_online_sessions_readonly', 'ongoing_online_sessions_readonly', 
+        'upcoming_offline_sessions_readonly', 'ongoing_offline_sessions_readonly'
     ]
     
     fieldsets = (
@@ -252,17 +278,14 @@ class EventAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at', 'closes_at')
         }),
         ('Статус', {
-            'fields': ('status', 'is_active')
+            'fields': ('status', 'is_active', 'is_private')
         }),
         ('Статистика', {
             'fields': (
-                'is_open_readonly', 
-                'has_online_sessions_readonly',
-                'has_offline_sessions_readonly',
-                'upcoming_online_sessions_readonly',
-                'ongoing_online_sessions_readonly',
-                'upcoming_offline_sessions_readonly',
-                'ongoing_offline_sessions_readonly'
+                'is_open_readonly', 'is_private_readonly',
+                'has_online_sessions_readonly', 'has_offline_sessions_readonly',
+                'upcoming_online_sessions_readonly', 'ongoing_online_sessions_readonly',
+                'upcoming_offline_sessions_readonly', 'ongoing_offline_sessions_readonly'
             ),
             'classes': ('collapse',)
         }),
@@ -270,10 +293,22 @@ class EventAdmin(admin.ModelAdmin):
     
     inlines = [EventParticipantInline, OnlineEventInfoInline, OfflineSessionsInfoInline]
     
-    actions = ['publish_selected', 'archive_selected', 'duplicate_selected']
+    actions = ['publish_selected', 'archive_selected', 'duplicate_selected', 
+               'make_private_selected', 'make_public_selected']
+    
+    def save_model(self, request, obj, form, change):
+        """Сохранение модели в админке"""
+        if not obj.pk:  # Если объект новый
+            if not obj.owner:  # Если владелец не указан
+                obj.owner = request.user  # Устанавливаем текущего пользователя
+        
+        # Просто сохраняем - участника создаст метод save() модели
+        super().save_model(request, obj, form, change)
+    
+    # ... остальные методы класса EventAdmin без изменений ...
     
     # Исправленный метод owner_link
-    @admin.display(description='Организатор')
+    @admin.display(description='Владелец')
     def owner_safe_link(self, obj):
         if not obj.owner:
             return "—"
@@ -311,6 +346,16 @@ class EventAdmin(admin.ModelAdmin):
             '<span style="color: {}; font-weight: bold;">{}</span>',
             color,
             obj.get_status_display()
+        )
+    
+    @admin.display(description='Приватное')
+    def is_private_display(self, obj):
+        if obj.is_private:
+            return format_html(
+                '<span style="color: purple;">🔒 Приватное</span>'
+            )
+        return format_html(
+            '<span style="color: green;">🌐 Публичное</span>'
         )
     
     @admin.display(description='Открыто')
@@ -421,6 +466,22 @@ class EventAdmin(admin.ModelAdmin):
         self.message_user(
             request, 
             f'Дублировано {duplicated} событий'
+        )
+    
+    @admin.action(description='Сделать приватными')
+    def make_private_selected(self, request, queryset):
+        updated = queryset.update(is_private=True)
+        self.message_user(
+            request,
+            f'{updated} событий стали приватными'
+        )
+    
+    @admin.action(description='Сделать публичными')
+    def make_public_selected(self, request, queryset):
+        updated = queryset.update(is_private=False)
+        self.message_user(
+            request,
+            f'{updated} событий стали публичными'
         )
     
     def get_queryset(self, request):
@@ -881,8 +942,8 @@ class EventParticipantAdmin(admin.ModelAdmin):
     def role_display(self, obj):
         colors = {
             'participant': 'blue',
-            'organizer': 'orange',
-            'volunteer': 'purple',
+            'owner': 'orange',
+            'referee': 'purple',
         }
         color = colors.get(obj.role, 'black')
         return format_html(
