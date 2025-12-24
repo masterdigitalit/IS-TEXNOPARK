@@ -1,3 +1,4 @@
+# events/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -161,15 +162,16 @@ class EventParticipantSerializer(serializers.ModelSerializer):
     user_email = serializers.CharField(source='user.email', read_only=True)
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
     event_name = serializers.CharField(source='event.name', read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
     
     class Meta:
         model = EventParticipant
         fields = [
             'id', 'event', 'event_id', 'user', 'user_id', 
             'user_email', 'user_name', 'event_name',
-            'registered_at', 'role', 'is_confirmed'
+            'registered_at', 'role', 'role_display', 'is_confirmed'
         ]
-        read_only_fields = ['registered_at']
+        read_only_fields = ['registered_at', 'role_display']
     
     def validate(self, data):
         """Валидация данных участника"""
@@ -374,11 +376,63 @@ class EventDetailSerializer(EventSerializer):
         many=True,
         read_only=True
     )
+    current_user_participation = serializers.SerializerMethodField()
     
     class Meta(EventSerializer.Meta):
         fields = EventSerializer.Meta.fields + [
-            'online_sessions', 'offline_sessions', 'participants'
+            'online_sessions', 'offline_sessions', 'participants',
+            'current_user_participation'
         ]
+    
+    def get_current_user_participation(self, obj):
+        """Получить информацию об участии текущего пользователя"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            # Ищем участие пользователя в этом событии
+            participation = EventParticipant.objects.filter(
+                event=obj,
+                user=request.user,
+                is_confirmed=True
+            ).first()
+            
+            if participation:
+                return {
+                    'id': participation.id,
+                    'role': participation.role,
+                    'role_display': participation.get_role_display(),
+                    'is_confirmed': participation.is_confirmed,
+                    'registered_at': participation.registered_at
+                }
+        return None
+
+
+class EventWithParticipationSerializer(EventSerializer):
+    """Сериализатор для события с информацией о участии текущего пользователя"""
+    current_user_participation = serializers.SerializerMethodField()
+    
+    class Meta(EventSerializer.Meta):
+        fields = EventSerializer.Meta.fields + ['current_user_participation']
+    
+    def get_current_user_participation(self, obj):
+        """Получить информацию об участии текущего пользователя"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            # Ищем участие пользователя в этом событии
+            participation = EventParticipant.objects.filter(
+                event=obj,
+                user=request.user,
+                is_confirmed=True
+            ).first()
+            
+            if participation:
+                return {
+                    'id': participation.id,
+                    'role': participation.role,
+                    'role_display': participation.get_role_display(),
+                    'is_confirmed': participation.is_confirmed,
+                    'registered_at': participation.registered_at
+                }
+        return None
 
 
 class OnlineEventInfoDetailSerializer(OnlineEventInfoSerializer):
