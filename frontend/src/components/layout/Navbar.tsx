@@ -65,9 +65,10 @@ const Navbar = () => {
         { name: 'Оценивание', path: '/referee/dashboard', icon: <ClipboardDocumentCheckIcon className="h-5 w-5" /> },
         { name: 'Мои оценки', path: '/referee/assessments', icon: <TrophyIcon className="h-5 w-5" /> },
       ],
-      student: [
-        { name: 'Мои выступления', path: '/student/dashboard', icon: <AcademicCapIcon className="h-5 w-5" /> },
-        { name: 'Результаты', path: '/student/results', icon: <TrophyIcon className="h-5 w-5" /> },
+      user: [
+        { name: 'Мои выступления', path: '/user/dashboard', icon: <AcademicCapIcon className="h-5 w-5" /> },
+        { name: 'Результаты', path: '/user/results', icon: <TrophyIcon className="h-5 w-5" /> },
+                { name: 'Конференции', path: '/user/events', icon: <AcademicCapIcon className="h-5 w-5" /> },
       ],
     };
 
@@ -95,9 +96,8 @@ const Navbar = () => {
     
     switch (user.role) {
       case 'admin': return 'bg-red-500';
-      case 'teacher': return 'bg-blue-500';
-      case 'referee': return 'bg-green-500';
-      case 'student': return 'bg-purple-500';
+
+      case 'user': return 'bg-purple-500';
       default: return 'bg-gray-500';
     }
   };

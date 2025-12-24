@@ -10,7 +10,7 @@ export interface User {
   last_name: string | null;
   full_name: string;
   short_name: string;
-  role: 'admin' | 'student' | 'teacher' | 'referee';
+  role: 'admin' |"user";
   role_display: string;
   phone: string | null;
   avatar_url: string | null;
