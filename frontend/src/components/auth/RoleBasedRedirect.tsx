@@ -13,17 +13,12 @@ export const RoleBasedRedirect: React.FC = () => {
         case 'admin':
           navigate('/admin/dashboard');
           break;
-        case 'teacher':
+        case 'user':
           navigate('/teacher/dashboard');
           break;
-        case 'referee':
-          navigate('/referee/dashboard');
-          break;
-        case 'student':
-          navigate('/student/dashboard');
-          break;
+       
         default:
-          navigate('/dashboard');
+          navigate('/');
       }
     }
   }, [user, isLoading, navigate]);

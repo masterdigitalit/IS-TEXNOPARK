@@ -14,6 +14,8 @@ import StudentDashboard from "./components/student/StudentDashboard";
 import { UserList } from "./components/admin/users/UsersPage";
 import { UserProfilePage } from "./components/admin/users/id/UserEditPage";
 import { EventList } from "./components/admin/events/EventList";
+import {EventListPublic} from './components/student/events/EventList'
+import { EventDetails } from "./components/student/events/ShowEvent";
 // import TeacherDashboard from './components/dashboards/TeacherDashboard';
 // import RefereeDashboard from './components/dashboards/RefereeDashboard';
 
@@ -100,31 +102,32 @@ function App() {
 						/>
 
 						<Route
-							path="/student/dashboard"
+							path="/user/dashboard"
 							element={
-								<ProtectedRoute requiredRole="student">
+								<ProtectedRoute requiredRole="user">
 									<StudentDashboard />
 								</ProtectedRoute>
 							}
 						/>
-
-						<Route
-							path="/teacher/dashboard"
+									<Route
+							path="/user/events"
 							element={
-								<ProtectedRoute requiredRole="teacher">
-									<TeacherDashboard />
+								<ProtectedRoute requiredRole="user">
+									<EventListPublic />
 								</ProtectedRoute>
 							}
 						/>
-
-						<Route
-							path="/referee/dashboard"
+											<Route
+							path="/user/events/:id"
 							element={
-								<ProtectedRoute requiredRole="referee">
-									<RefereeDashboard />
+								<ProtectedRoute requiredRole="user">
+									<EventDetails />
 								</ProtectedRoute>
 							}
 						/>
+						
+
+					
 
 						{/* 404 страница */}
 						<Route
