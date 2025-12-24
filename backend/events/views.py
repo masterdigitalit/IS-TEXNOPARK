@@ -14,7 +14,8 @@ from .serializers import (
     EventSerializer, EventDetailSerializer, EventParticipantSerializer,
     OnlineEventInfoSerializer, OnlineEventInfoDetailSerializer,
     SessionAttendanceSerializer, SessionMaterialSerializer,
-    OfflineSessionsInfoSerializer, UserSimpleSerializer
+    OfflineSessionsInfoSerializer, UserSimpleSerializer,
+    EventWithParticipationSerializer  # Добавили новый сериализатор
 )
 
 User = get_user_model()
@@ -159,6 +160,8 @@ class EventViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return EventDetailSerializer
+        elif self.action == 'participating':
+            return EventWithParticipationSerializer
         return EventSerializer
     
     def get_permissions(self):
@@ -173,54 +176,17 @@ class EventViewSet(viewsets.ModelViewSet):
             permission_classes = [permissions.AllowAny]  # Разрешаем всем доступ к чтению
         return [permission() for permission in permission_classes]
     
-    # events/views.py (в классе EventViewSet, метод get_queryset)
-
     def get_queryset(self):
         """Возвращаем queryset в зависимости от пользователя"""
         queryset = super().get_queryset()
         user = self.request.user
         
-        # НЕ аннотируем поля, которые уже определены как свойства в модели
-        # Вместо этого используем prefetch_related для оптимизации запросов
+        # Оптимизация запросов
         queryset = queryset.prefetch_related(
             'online_sessions',
             'offline_sessions',
             'event_participants'
         ).select_related('owner')
-        
-        if user.is_authenticated:
-            if user.is_staff or user.is_superuser:
-                return queryset
-            
-            # Аннотируем, участвует ли пользователь в событии
-            from django.db.models import Exists, OuterRef
-            participations = EventParticipant.objects.filter(
-                event=OuterRef('pk'),
-                user=user,
-                is_confirmed=True
-            )
-            queryset = queryset.annotate(is_participant=Exists(participations))
-            
-            # Пользователи видят свои события, опубликованные и события, в которых участвуют
-            return queryset.filter(
-                Q(owner=user) | 
-                Q(status='published', is_active=True) |
-                Q(is_participant=True)
-            )
-        
-        # Неаутентифицированные пользователи видят только опубликованные
-        return queryset.filter(status='published', is_active=True)
-        """Возвращаем queryset в зависимости от пользователя"""
-        queryset = super().get_queryset()
-        user = self.request.user
-        
-        # Аннотируем queryset с количеством сессий
-        queryset = queryset.annotate(
-            online_sessions_count=Count('online_sessions', distinct=True),
-            offline_sessions_count=Count('offline_sessions', distinct=True),
-            participants_count=Count('event_participants', distinct=True, 
-                                    filter=Q(event_participants__is_confirmed=True))
-        )
         
         if user.is_authenticated:
             if user.is_staff or user.is_superuser:
@@ -307,25 +273,30 @@ class EventViewSet(viewsets.ModelViewSet):
         events = self.get_queryset().filter(owner=request.user)
         page = self.paginate_queryset(events)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            serializer = self.get_serializer(page, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(events, many=True)
+        serializer = self.get_serializer(events, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def participating(self, request):
         """Получить события, в которых участвует пользователь"""
-        participations = EventParticipant.objects.filter(
+        # Получаем ID событий, в которых пользователь участвует
+        event_ids = EventParticipant.objects.filter(
             user=request.user,
             is_confirmed=True
         ).values_list('event_id', flat=True)
         
-        events = self.get_queryset().filter(id__in=participations)
-        page = self.paginate_queryset(events)
+        # Получаем события
+        queryset = self.get_queryset().filter(id__in=event_ids)
+        
+        # Пагинация
+        page = self.paginate_queryset(queryset)
         if page is not None:
-            serializer = self.get_serializer(page, many=True)
+            serializer = self.get_serializer(page, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(events, many=True)
+        
+        serializer = self.get_serializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
@@ -336,7 +307,11 @@ class EventViewSet(viewsets.ModelViewSet):
             is_active=True,
             closes_at__gt=timezone.now()
         )
-        serializer = self.get_serializer(events, many=True)
+        page = self.paginate_queryset(events)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(events, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -344,7 +319,7 @@ class EventViewSet(viewsets.ModelViewSet):
         """Получить участников события"""
         event = self.get_object()
         participants = event.event_participants.filter(is_confirmed=True)
-        serializer = EventParticipantSerializer(participants, many=True)
+        serializer = EventParticipantSerializer(participants, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -352,7 +327,7 @@ class EventViewSet(viewsets.ModelViewSet):
         """Получить все онлайн сессии события"""
         event = self.get_object()
         sessions = event.online_sessions.filter(is_active=True)
-        serializer = OnlineEventInfoSerializer(sessions, many=True)
+        serializer = OnlineEventInfoSerializer(sessions, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -360,7 +335,7 @@ class EventViewSet(viewsets.ModelViewSet):
         """Получить все офлайн сессии события"""
         event = self.get_object()
         sessions = event.offline_sessions.filter(is_active=True)
-        serializer = OfflineSessionsInfoSerializer(sessions, many=True)
+        serializer = OfflineSessionsInfoSerializer(sessions, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -381,8 +356,8 @@ class EventViewSet(viewsets.ModelViewSet):
         )
         
         return Response({
-            'online_sessions': OnlineEventInfoSerializer(online_sessions, many=True).data,
-            'offline_sessions': OfflineSessionsInfoSerializer(offline_sessions, many=True).data,
+            'online_sessions': OnlineEventInfoSerializer(online_sessions, many=True, context={'request': request}).data,
+            'offline_sessions': OfflineSessionsInfoSerializer(offline_sessions, many=True, context={'request': request}).data,
             'total_upcoming': online_sessions.count() + offline_sessions.count()
         })
     
@@ -570,7 +545,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
             attendance.status = 'joined'
             attendance.save()
         
-        serializer = SessionAttendanceSerializer(attendance)
+        serializer = SessionAttendanceSerializer(attendance, context={'request': request})
         return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
@@ -601,7 +576,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
             status='scheduled',
             start_time__gt=timezone.now()
         )
-        serializer = self.get_serializer(sessions, many=True)
+        serializer = self.get_serializer(sessions, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
@@ -611,7 +586,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
             is_active=True,
             status='ongoing'
         )
-        serializer = self.get_serializer(sessions, many=True)
+        serializer = self.get_serializer(sessions, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -619,7 +594,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
         """Получить список посещаемости сессии"""
         session = self.get_object()
         attendances = session.attendances.all()
-        serializer = SessionAttendanceSerializer(attendances, many=True)
+        serializer = SessionAttendanceSerializer(attendances, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -627,7 +602,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
         """Получить материалы сессии"""
         session = self.get_object()
         materials = session.materials.filter(is_public=True)
-        serializer = SessionMaterialSerializer(materials, many=True)
+        serializer = SessionMaterialSerializer(materials, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -635,7 +610,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
         """Получить информацию о событии, к которому относится сессия"""
         session = self.get_object()
         event = session.event
-        serializer = EventSerializer(event)
+        serializer = EventSerializer(event, context={'request': request})
         return Response(serializer.data)
 
 
@@ -694,7 +669,7 @@ class SessionAttendanceViewSet(viewsets.ModelViewSet):
         attendance.update_duration()
         attendance.save()
         
-        serializer = self.get_serializer(attendance)
+        serializer = self.get_serializer(attendance, context={'request': request})
         return Response(serializer.data)
 
 
@@ -793,7 +768,7 @@ class OfflineSessionsInfoViewSet(viewsets.ModelViewSet):
             status='scheduled',
             start_time__gt=timezone.now()
         )
-        serializer = self.get_serializer(sessions, many=True)
+        serializer = self.get_serializer(sessions, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
@@ -801,7 +776,7 @@ class OfflineSessionsInfoViewSet(viewsets.ModelViewSet):
         """Получить информацию о событии, к которому относится сессия"""
         session = self.get_object()
         event = session.event
-        serializer = EventSerializer(event)
+        serializer = EventSerializer(event, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
