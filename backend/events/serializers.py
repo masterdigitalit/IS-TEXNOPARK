@@ -4,8 +4,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import (
     Event, EventParticipant, OnlineEventInfo, 
-    SessionAttendance, SessionMaterial, OfflineSessionsInfo
+    SessionAttendance, SessionMaterial, OfflineSessionsInfo, EventFile  # ← ДОБАВЛЕНО: EventFile
 )
+from files.serializers import StorageFileSerializer  # ← ДОБАВЛЕНО: импорт сериализатора файлов
 
 User = get_user_model()
 
@@ -64,6 +65,61 @@ class OfflineSessionSimpleSerializer(serializers.ModelSerializer):
 
 
 # ====================
+# ДОБАВЛЕНО: Сериализаторы для файлов событий
+# ====================
+
+class EventFileSimpleSerializer(serializers.ModelSerializer):
+    """Упрощенный сериализатор для файлов событий (для списка)"""
+    file_name = serializers.CharField(source='storage_file.name', read_only=True)
+    file_size = serializers.IntegerField(source='storage_file.file_size', read_only=True)
+    file_url = serializers.CharField(source='storage_file.file_url', read_only=True)
+    file_size_display = serializers.CharField(source='storage_file.file_size_display', read_only=True)
+    
+    class Meta:
+        model = EventFile
+        fields = [
+            'id', 'category', 'description', 'is_public',
+            'file_name', 'file_size', 'file_size_display', 'file_url',
+            'uploaded_at', 'display_order'
+        ]
+        read_only_fields = ['uploaded_at']
+
+
+class EventFileSerializer(serializers.ModelSerializer):
+    """Сериализатор для файлов событий с полной информацией"""
+    storage_file_data = StorageFileSerializer(source='storage_file', read_only=True)
+    uploaded_by = UserSimpleSerializer(read_only=True)
+    uploaded_by_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source='uploaded_by',
+        write_only=True,
+        required=False
+    )
+    event = serializers.PrimaryKeyRelatedField(
+        queryset=Event.objects.all(),
+        write_only=True
+    )
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    
+    class Meta:
+        model = EventFile
+        fields = [
+            'id', 'event', 'storage_file', 'storage_file_data',
+            'category', 'category_display', 'description', 'is_public',
+            'uploaded_by', 'uploaded_by_id', 'uploaded_at', 'display_order'
+        ]
+        read_only_fields = ['uploaded_at', 'uploaded_by']
+    
+    def create(self, validated_data):
+        """Создание связи файла с событием"""
+        request = self.context.get('request')
+        if request and request.user:
+            validated_data['uploaded_by'] = request.user
+        
+        return super().create(validated_data)
+
+
+# ====================
 # Основные сериализаторы
 # ====================
 
@@ -82,6 +138,7 @@ class EventSerializer(serializers.ModelSerializer):
     online_sessions_count = serializers.IntegerField(read_only=True)
     offline_sessions_count = serializers.IntegerField(read_only=True)
     participants_count = serializers.SerializerMethodField()
+    files_count = serializers.IntegerField(source='files_count', read_only=True)  # ← ДОБАВЛЕНО
     is_private = serializers.BooleanField(default=False)
     
     # Краткая информация о сессиях
@@ -95,12 +152,14 @@ class EventSerializer(serializers.ModelSerializer):
             'created_at', 'closes_at', 'image_url', 'updated_at', 'is_active',
             'is_open', 'has_online_sessions', 'has_offline_sessions',
             'online_sessions_count', 'offline_sessions_count', 'participants_count',
+            'files_count',  # ← ДОБАВЛЕНО
             'upcoming_online_sessions', 'upcoming_offline_sessions', 'is_private'
         ]
         read_only_fields = [
             'created_at', 'updated_at', 'owner', 'is_open',
             'has_online_sessions', 'has_offline_sessions',
-            'online_sessions_count', 'offline_sessions_count'
+            'online_sessions_count', 'offline_sessions_count',
+            'files_count'  # ← ДОБАВЛЕНО
         ]
     
     def get_participants_count(self, obj):
@@ -376,11 +435,13 @@ class EventDetailSerializer(EventSerializer):
         many=True,
         read_only=True
     )
+    files = EventFileSimpleSerializer(source='event_files', many=True, read_only=True)  # ← ДОБАВЛЕНО
     current_user_participation = serializers.SerializerMethodField()
     
     class Meta(EventSerializer.Meta):
         fields = EventSerializer.Meta.fields + [
             'online_sessions', 'offline_sessions', 'participants',
+            'files',  # ← ДОБАВЛЕНО
             'current_user_participation'
         ]
     

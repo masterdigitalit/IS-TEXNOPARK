@@ -5,7 +5,7 @@ from django.db import models
 from django.db.models import Count
 from .models import (
     Event, EventParticipant, OnlineEventInfo, OfflineSessionsInfo,
-    SessionAttendance, SessionMaterial
+    SessionAttendance, SessionMaterial, EventFile  # ← ДОБАВЛЕНО: EventFile
 )
 
 
@@ -70,6 +70,20 @@ class SessionMaterialInline(admin.TabularInline):
     fields = ['title', 'material_type', 'file', 'file_url', 'is_public']
     readonly_fields = ['uploaded_at']
     classes = ['collapse']
+
+
+# ============= ДОБАВЛЕНО: Inline для файлов событий =============
+class EventFileInline(admin.TabularInline):
+    """Inline для файлов событий"""
+    model = EventFile
+    extra = 0
+    fields = ['storage_file', 'category', 'description', 'is_public', 'display_order']
+    readonly_fields = ['uploaded_at']
+    show_change_link = True
+    classes = ['collapse']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('storage_file', 'uploaded_by')
 
 
 # Фильтры для админки
@@ -164,6 +178,21 @@ class SessionTypeFilter(admin.SimpleListFilter):
         return queryset
 
 
+# ============= ДОБАВЛЕНО: Фильтр для категорий файлов =============
+class EventFileCategoryFilter(admin.SimpleListFilter):
+    """Фильтр по категории файлов событий"""
+    title = 'Категория файла'
+    parameter_name = 'category'
+    
+    def lookups(self, request, model_admin):
+        return EventFile.FILE_CATEGORIES
+    
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(category=self.value())
+        return queryset
+
+
 # Основные админ-классы
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
@@ -171,8 +200,8 @@ class EventAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'owner_safe_link', 'status_display', 'is_private_display',
         'is_open_display', 'participant_count', 'online_sessions_count', 
-        'offline_sessions_count', 'total_sessions_count', 'created_at_display', 
-        'is_active_display'
+        'offline_sessions_count', 'total_sessions_count', 'files_count',  # ← ДОБАВЛЕНО: files_count
+        'created_at_display', 'is_active_display'
     ]
     
     list_filter = [
@@ -213,6 +242,24 @@ class EventAdmin(admin.ModelAdmin):
         if obj.offline_sessions.exists():
             return format_html('<span style="color: green;">✓ Да</span>')
         return format_html('<span style="color: red;">✗ Нет</span>')
+    
+    @admin.display(description='Есть файлы')
+    def has_files_readonly(self, obj):  # ← ДОБАВЛЕНО: новый метод
+        if obj.has_files:
+            return format_html('<span style="color: green;">✓ Да</span>')
+        return format_html('<span style="color: red;">✗ Нет</span>')
+    
+    @admin.display(description='Файлов событий')
+    def event_files_count_readonly(self, obj):  # ← ДОБАВЛЕНО: новый метод
+        count = obj.files_count
+        if count > 0:
+            url = f'/admin/events/eventfile/?event__id={obj.id}'
+            return format_html(
+                '<a href="{}" style="color: blue;">{}</a>',
+                url,
+                count
+            )
+        return format_html(f'<span style="color: gray;">{count}</span>')
     
     @admin.display(description='Предстоящие онлайн')
     def upcoming_online_sessions_readonly(self, obj):
@@ -265,7 +312,8 @@ class EventAdmin(admin.ModelAdmin):
     readonly_fields = [
         'created_at', 'updated_at', 
         'is_open_readonly', 'is_private_readonly',
-        'has_online_sessions_readonly', 'has_offline_sessions_readonly', 
+        'has_online_sessions_readonly', 'has_offline_sessions_readonly',
+        'has_files_readonly', 'event_files_count_readonly',  # ← ДОБАВЛЕНО: новые поля
         'upcoming_online_sessions_readonly', 'ongoing_online_sessions_readonly', 
         'upcoming_offline_sessions_readonly', 'ongoing_offline_sessions_readonly'
     ]
@@ -284,6 +332,7 @@ class EventAdmin(admin.ModelAdmin):
             'fields': (
                 'is_open_readonly', 'is_private_readonly',
                 'has_online_sessions_readonly', 'has_offline_sessions_readonly',
+                'has_files_readonly', 'event_files_count_readonly',  # ← ДОБАВЛЕНО
                 'upcoming_online_sessions_readonly', 'ongoing_online_sessions_readonly',
                 'upcoming_offline_sessions_readonly', 'ongoing_offline_sessions_readonly'
             ),
@@ -291,7 +340,12 @@ class EventAdmin(admin.ModelAdmin):
         }),
     )
     
-    inlines = [EventParticipantInline, OnlineEventInfoInline, OfflineSessionsInfoInline]
+    inlines = [
+        EventParticipantInline, 
+        OnlineEventInfoInline, 
+        OfflineSessionsInfoInline,
+        EventFileInline  # ← ДОБАВЛЕНО: новый inline
+    ]
     
     actions = ['publish_selected', 'archive_selected', 'duplicate_selected', 
                'make_private_selected', 'make_public_selected']
@@ -305,9 +359,6 @@ class EventAdmin(admin.ModelAdmin):
         # Просто сохраняем - участника создаст метод save() модели
         super().save_model(request, obj, form, change)
     
-    # ... остальные методы класса EventAdmin без изменений ...
-    
-    # Исправленный метод owner_link
     @admin.display(description='Владелец')
     def owner_safe_link(self, obj):
         if not obj.owner:
@@ -424,6 +475,21 @@ class EventAdmin(admin.ModelAdmin):
         except Exception:
             return "0"
     
+    @admin.display(description='Файлы')  # ← ДОБАВЛЕНО: новый метод
+    def files_count(self, obj):
+        try:
+            count = obj.files_count
+            if count > 0:
+                url = f'/admin/events/eventfile/?event__id={obj.id}'
+                return format_html(
+                    '<a href="{}" style="color: orange;">{}</a>',
+                    url,
+                    count
+                )
+            return count
+        except Exception:
+            return "0"
+    
     @admin.display(description='Создано', ordering='created_at')
     def created_at_display(self, obj):
         return obj.created_at.strftime('%d.%m.%Y %H:%M') if obj.created_at else "—"
@@ -487,7 +553,168 @@ class EventAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         qs = qs.select_related('owner')
-        qs = qs.prefetch_related('event_participants', 'online_sessions', 'offline_sessions')
+        qs = qs.prefetch_related('event_participants', 'online_sessions', 'offline_sessions', 'event_files')
+        return qs
+
+
+# ============= ДОБАВЛЕНО: Админ-класс для EventFile =============
+@admin.register(EventFile)
+class EventFileAdmin(admin.ModelAdmin):
+    """Админ-класс для файлов событий"""
+    list_display = [
+        'event_safe_link', 'storage_file_link', 'category_display',
+        'file_size_display', 'is_public_display', 'uploaded_by_safe_link',
+        'uploaded_at_display'
+    ]
+    
+    list_filter = [
+        EventFileCategoryFilter, 'is_public', 'uploaded_at', 'event'
+    ]
+    
+    search_fields = [
+        'event__name', 'storage_file__name', 'storage_file__original_name',
+        'description', 'uploaded_by__username', 'uploaded_by__email'
+    ]
+    
+    list_select_related = ['event', 'storage_file', 'uploaded_by']
+    
+    date_hierarchy = 'uploaded_at'
+    
+    readonly_fields = ['uploaded_at', 'file_url_display', 'file_size_display_readonly']
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('event', 'storage_file')
+        }),
+        ('Детали файла', {
+            'fields': ('category', 'description', 'display_order')
+        }),
+        ('Доступ', {
+            'fields': ('is_public', 'uploaded_by', 'uploaded_at')
+        }),
+        ('Информация о файле', {
+            'fields': ('file_url_display', 'file_size_display_readonly'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['make_public_selected', 'make_private_selected']
+    
+    @admin.display(description='Событие', ordering='event__name')
+    def event_safe_link(self, obj):
+        if not obj.event:
+            return "—"
+        
+        try:
+            url = f'/admin/events/event/{obj.event.id}/change/'
+            return format_html(
+                '<a href="{}">{}</a>',
+                url,
+                obj.event.name
+            )
+        except Exception:
+            return str(obj.event)
+    
+    @admin.display(description='Файл', ordering='storage_file__name')
+    def storage_file_link(self, obj):
+        if not obj.storage_file:
+            return "—"
+        
+        try:
+            url = f'/admin/files/storagefile/{obj.storage_file.id}/change/'
+            return format_html(
+                '<a href="{}">{}</a>',
+                url,
+                obj.storage_file.name[:50]
+            )
+        except Exception:
+            return obj.storage_file.name[:50] if obj.storage_file else "—"
+    
+    @admin.display(description='Категория')
+    def category_display(self, obj):
+        icons = {
+            'agenda': '📋',
+            'presentation': '📊',
+            'document': '📄',
+            'photo': '🖼️',
+            'video': '🎬',
+            'audio': '🎵',
+            'result': '🏆',
+            'other': '📁',
+        }
+        icon = icons.get(obj.category, '📁')
+        return f"{icon} {obj.get_category_display()}"
+    
+    @admin.display(description='Размер')
+    def file_size_display(self, obj):
+        if obj.storage_file and obj.storage_file.file_size_display:
+            return obj.storage_file.file_size_display
+        return "—"
+    
+    @admin.display(description='Публичный')
+    def is_public_display(self, obj):
+        if obj.is_public:
+            return format_html('<span style="color: green;">✓ Да</span>')
+        return format_html('<span style="color: red;">✗ Нет</span>')
+    
+    @admin.display(description='Загрузил', ordering='uploaded_by__username')
+    def uploaded_by_safe_link(self, obj):
+        if not obj.uploaded_by:
+            return "—"
+        
+        try:
+            url = f'/admin/auth/user/{obj.uploaded_by.id}/change/'
+            if hasattr(obj.uploaded_by, 'username'):
+                display_name = obj.uploaded_by.username
+            elif hasattr(obj.uploaded_by, 'email'):
+                display_name = obj.uploaded_by.email
+            else:
+                display_name = str(obj.uploaded_by)
+            
+            return format_html(
+                '<a href="{}">{}</a>',
+                url,
+                display_name
+            )
+        except Exception:
+            return str(obj.uploaded_by)
+    
+    @admin.display(description='Загружен', ordering='uploaded_at')
+    def uploaded_at_display(self, obj):
+        return obj.uploaded_at.strftime('%d.%m.%Y %H:%M') if obj.uploaded_at else "—"
+    
+    @admin.display(description='URL файла')
+    def file_url_display(self, obj):
+        if obj.file_url:
+            return format_html(
+                '<a href="{}" target="_blank">🔗 Открыть файл</a>',
+                obj.file_url
+            )
+        return "—"
+    
+    @admin.display(description='Размер файла')
+    def file_size_display_readonly(self, obj):
+        if obj.file_size:
+            return format_html(
+                '<span style="color: #666;">{}</span>',
+                obj.storage_file.file_size_display if obj.storage_file else "—"
+            )
+        return "—"
+    
+    # Действия
+    @admin.action(description='Сделать публичными')
+    def make_public_selected(self, request, queryset):
+        updated = queryset.update(is_public=True)
+        self.message_user(request, f'{updated} файлов стали публичными')
+    
+    @admin.action(description='Сделать приватными')
+    def make_private_selected(self, request, queryset):
+        updated = queryset.update(is_public=False)
+        self.message_user(request, f'{updated} файлов стали приватными')
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        qs = qs.select_related('event', 'storage_file', 'uploaded_by')
         return qs
 
 

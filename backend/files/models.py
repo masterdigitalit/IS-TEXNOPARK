@@ -106,7 +106,8 @@ class StorageFile(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.name} ({self.get_file_size_display()})"
+        # ИСПРАВЛЕНО: Используем property file_size_display
+        return f"{self.name} ({self.file_size_display})"
     
     @property
     def file_url(self):
@@ -119,6 +120,9 @@ class StorageFile(models.Model):
     def file_size_display(self):
         """Человекочитаемый размер файла"""
         size = self.file_size
+        if size == 0:
+            return "0 B"
+        
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size < 1024.0:
                 return f"{size:.2f} {unit}"
@@ -214,3 +218,4 @@ class FileShareLink(models.Model):
         return self.is_active and not self.is_expired and (
             self.max_downloads == 0 or self.download_count < self.max_downloads
         )
+  

@@ -177,6 +177,32 @@ class Event(models.Model):
                     'is_confirmed': True
                 }
             )
+    
+    # ============= ДОБАВЛЕНО: Методы для работы с файлами =============
+    
+    @property
+    def has_files(self):
+        """Есть ли прикрепленные файлы у события"""
+        return self.event_files.exists()
+    
+    @property
+    def files_count(self):
+        """Количество прикрепленных файлов"""
+        return self.event_files.count()
+    
+    @property
+    def public_files(self):
+        """Публичные файлы события"""
+        return self.event_files.filter(is_public=True)
+    
+    @property
+    def public_files_count(self):
+        """Количество публичных файлов"""
+        return self.public_files.count()
+    
+    def get_files_by_category(self, category):
+        """Получить файлы по категории"""
+        return self.event_files.filter(category=category)
 
 
 class EventParticipant(models.Model):
@@ -829,3 +855,107 @@ class OfflineSessionsInfo(models.Model):
         
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+# ============= ДОБАВЛЕНО: Модель для связи событий с файлами =============
+
+class EventFile(models.Model):
+    """
+    Модель для связи событий с файлами из файлового хранилища.
+    Позволяет прикреплять файлы к событиям.
+    """
+    
+    FILE_CATEGORIES = [
+        ('agenda', _('Повестка дня')),
+        ('presentation', _('Презентация')),
+        ('document', _('Документ')),
+        ('photo', _('Фотография')),
+        ('video', _('Видеозапись')),
+        ('audio', _('Аудиозапись')),
+        ('result', _('Результаты')),
+        ('other', _('Другое')),
+    ]
+    
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='event_files',
+        verbose_name=_('Событие')
+    )
+    
+    storage_file = models.ForeignKey(
+        'files.StorageFile',  # Ссылка на модель из приложения files
+        on_delete=models.CASCADE,
+        related_name='event_attachments',
+        verbose_name=_('Файл из хранилища'),
+        help_text=_('Файл из файлового хранилища')
+    )
+    
+    category = models.CharField(
+        max_length=20,
+        choices=FILE_CATEGORIES,
+        default='document',
+        verbose_name=_('Категория файла'),
+        help_text=_('Для чего используется этот файл в контексте события')
+    )
+    
+    description = models.TextField(
+        verbose_name=_('Описание'),
+        blank=True,
+        null=True,
+        help_text=_('Дополнительное описание файла в контексте события')
+    )
+    
+    is_public = models.BooleanField(
+        default=True,
+        verbose_name=_('Публичный доступ'),
+        help_text=_('Доступен ли файл всем участникам события')
+    )
+    
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='uploaded_event_files',
+        verbose_name=_('Загрузил')
+    )
+    
+    uploaded_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_('Дата прикрепления')
+    )
+    
+    display_order = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_('Порядок отображения'),
+        help_text=_('Чем меньше число, тем выше в списке')
+    )
+    
+    class Meta:
+        verbose_name = _('Файл события')
+        verbose_name_plural = _('Файлы событий')
+        ordering = ['display_order', '-uploaded_at']
+        unique_together = ['event', 'storage_file']
+        indexes = [
+            models.Index(fields=['event', 'category']),
+            models.Index(fields=['is_public']),
+            models.Index(fields=['uploaded_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.storage_file.name} → {self.event.name}"
+    
+    @property
+    def file_url(self):
+        """URL файла для скачивания"""
+        return self.storage_file.file_url
+    
+    @property
+    def file_size(self):
+        """Размер файла"""
+        return self.storage_file.file_size
+    
+    @property
+    def file_name(self):
+        """Имя файла"""
+        return self.storage_file.name
