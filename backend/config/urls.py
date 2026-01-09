@@ -17,6 +17,8 @@ urlpatterns = [
     path('api/v1/', include('events.urls')),
     path('api/v1/user/notifications/', include('notifications.urls')),
     # path('api/v1/events/', include('events.urls')),
+
+    path('api/v1/files/', include('files.urls')),
     
     # Swagger/Redoc
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
