@@ -76,6 +76,7 @@ export const EventListPublic: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [nameSearch, setNameSearch] = useState(''); // Добавлен отдельный поиск по названию
   const [filters, setFilters] = useState<EventFilters>({});
   const pageSize = 15;
 
@@ -91,8 +92,12 @@ export const EventListPublic: React.FC = () => {
         ...filters
       };
       
-      // Добавляем поиск если есть
-      if (searchTerm) {
+      // Добавляем поиск по названию если есть
+      if (nameSearch) {
+        params.search = nameSearch;
+      }
+      // Или добавляем общий поиск если есть (для совместимости)
+      else if (searchTerm) {
         params.search = searchTerm;
       }
       
@@ -125,10 +130,35 @@ export const EventListPublic: React.FC = () => {
   };
 
   const handleSearch = () => {
-    setFilters(prev => ({
-      ...prev,
-      search: searchTerm || undefined
-    }));
+    if (nameSearch.trim()) {
+      setFilters(prev => ({
+        ...prev,
+        search: nameSearch.trim()
+      }));
+    } else if (searchTerm.trim()) {
+      setFilters(prev => ({
+        ...prev,
+        search: searchTerm.trim()
+      }));
+    } else {
+      // Убираем поиск из фильтров если оба поля пустые
+      const { search, ...otherFilters } = filters;
+      setFilters(otherFilters);
+    }
+    setPage(1);
+  };
+
+  const handleNameSearch = () => {
+    if (nameSearch.trim()) {
+      setFilters(prev => ({
+        ...prev,
+        search: nameSearch.trim()
+      }));
+    } else {
+      // Убираем поиск из фильтров если поле пустое
+      const { search, ...otherFilters } = filters;
+      setFilters(otherFilters);
+    }
     setPage(1);
   };
 
@@ -143,7 +173,22 @@ export const EventListPublic: React.FC = () => {
   const handleResetFilters = () => {
     setFilters({});
     setSearchTerm('');
+    setNameSearch('');
     setPage(1);
+  };
+
+  // Обработка нажатия Enter в поле поиска по названию
+  const handleNameSearchKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleNameSearch();
+    }
+  };
+
+  // Обработка нажатия Enter в общем поле поиска
+  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
   };
 
   const toggleEventStatus = async (eventId: number, currentStatus: boolean) => {
@@ -243,6 +288,14 @@ export const EventListPublic: React.FC = () => {
   const draftEvents = events.filter(e => e.status === 'draft').length;
   const eventsWithOnline = events.filter(e => e.has_online_sessions).length;
 
+  // Фильтрация по названию на клиенте (альтернативный вариант)
+  const filteredEvents = nameSearch.trim() 
+    ? events.filter(event => 
+        event.name.toLowerCase().includes(nameSearch.toLowerCase()) ||
+        (event.description && event.description.toLowerCase().includes(nameSearch.toLowerCase()))
+      )
+    : events;
+
   return (
     <div className="p-6">
       {/* Заголовок и кнопки */}
@@ -292,40 +345,85 @@ export const EventListPublic: React.FC = () => {
 
       {/* Поиск и фильтры */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="flex items-center space-x-4 mb-4">
+        <div className="flex flex-col md:flex-row gap-4 mb-4">
+          {/* Поиск по названию */}
           <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Поиск по названию
+            </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
               </div>
               <input
                 type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Поиск по названию или описанию..."
+                value={nameSearch}
+                onChange={(e) => setNameSearch(e.target.value)}
+                onKeyPress={handleNameSearchKeyPress}
+                placeholder="Введите название события..."
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
-          <button
-            onClick={handleSearch}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Найти
-          </button>
+
+          {/* Кнопки для поиска по названию */}
+          <div className="flex items-end">
+            <button
+              onClick={handleNameSearch}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Найти
+            </button>
+            {nameSearch && (
+              <button
+                onClick={() => {
+                  setNameSearch('');
+                  const { search, ...otherFilters } = filters;
+                  setFilters(otherFilters);
+                  setPage(1);
+                }}
+                className="ml-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Сбросить
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Расширенный поиск (сворачиваемый) */}
+        <div className="mb-4">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50"
+            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
           >
-            <FunnelIcon className="h-5 w-5 mr-2" />
-            Фильтры
+            <FunnelIcon className="h-4 w-4 mr-2" />
+            {showFilters ? 'Скрыть расширенные фильтры' : 'Показать расширенные фильтры'}
           </button>
         </div>
 
         {showFilters && (
           <div className="pt-4 border-t border-gray-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Общий поиск (опционально, можно удалить если не нужен) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Общий поиск
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    placeholder="Поиск по названию и описанию..."
+                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Статус
@@ -357,7 +455,9 @@ export const EventListPublic: React.FC = () => {
                   <option value="false">Неактивные</option>
                 </select>
               </div>
-              
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Сортировка
@@ -378,12 +478,18 @@ export const EventListPublic: React.FC = () => {
               </div>
             </div>
             
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-between">
+              <button
+                onClick={handleSearch}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Применить все фильтры
+              </button>
               <button
                 onClick={handleResetFilters}
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
-                Сбросить фильтры
+                Сбросить все фильтры
               </button>
             </div>
           </div>
@@ -415,165 +521,188 @@ export const EventListPublic: React.FC = () => {
       )}
 
       {/* Таблица событий */}
-{!loading && events.length > 0 && (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-    <table className="min-w-full divide-y divide-gray-200">
-      <thead className="bg-gray-50">
-        <tr>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Событие
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Организатор
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Статус
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Даты
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Участники
-          </th>
-          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            Сессии
-          </th>
-        </tr>
-      </thead>
-      <tbody className="bg-white divide-y divide-gray-200">
-        {events.map(event => (
-          <tr 
-            key={event.id} 
-            className="hover:bg-gray-50 cursor-pointer"
-            onClick={() => navigateToConference(event)}
-          >
-            <td className="px-6 py-4">
-              <div>
-                <div className="font-medium text-gray-900 flex items-center justify-between">
-                  <span className="hover:text-blue-600">
-                    {event.name}
-                  </span>
-                  {!event.is_active && (
-                    <span className="ml-2 text-xs text-gray-500">(неактивно)</span>
-                  )}
+      {!loading && events.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          {/* Показать результаты поиска по названию (если применимо) */}
+          {nameSearch && (
+            <div className="px-6 py-3 bg-blue-50 border-b border-blue-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-blue-700">
+                  Найдено {events.length} событий по запросу "{nameSearch}"
                 </div>
-                <div className="text-sm text-gray-500 truncate max-w-md">
-                  {event.description || 'Без описания'}
-                </div>
+                <button
+                  onClick={() => {
+                    setNameSearch('');
+                    const { search, ...otherFilters } = filters;
+                    setFilters(otherFilters);
+                    setPage(1);
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  × Очистить поиск
+                </button>
               </div>
-            </td>
-            
-                     <td className="px-6 py-4 whitespace-nowrap">
-              <div className="flex items-center">
-                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
-                  <UserIcon className="h-4 w-4 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-900">
-                    {event.owner.full_name || event.owner.username}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {event.owner.email}
-                  </div>
-                </div>
-              </div>
-           </td>
-            
-            <td className="px-6 py-4 whitespace-nowrap">
-              <div className="flex flex-col gap-1">
-               
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  event.is_open 
-                    ? 'bg-green-100 text-green-800 border border-green-200' 
-                    : 'bg-red-100 text-red-800 border border-red-200'
-                }`}>
-                  {event.is_open ? 'Открыто' : 'Закрыто'}
-                </span>
-              </div>
-            </td>
-            
-            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              <div className="space-y-1">
-                <div className="flex items-center">
-                  <CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
-                  <span>Создано: {formatDate(event.created_at)}</span>
-                </div>
-                {event.closes_at && (
-                  <div className="flex items-center">
-                    <ClockIcon className="h-4 w-4 text-gray-400 mr-2" />
-                    <span>Закрытие: {formatDate(event.closes_at)}</span>
-                  </div>
-                )}
-              </div>
-            </td>
-            
-            <td className="px-6 py-4 whitespace-nowrap">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  {event.participants_count}
-                </div>
-              </div>
-            </td>
-            
-            <td className="px-6 py-4 whitespace-nowrap">
-              <div className="flex space-x-2">
-                {event.has_online_sessions && (
-                  <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-                    <VideoCameraIcon className="h-3 w-3 mr-1" />
-                    Онлайн
-                  </span>
-                )}
-                {event.has_offline_sessions && (
-                  <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-                    <MapPinIcon className="h-3 w-3 mr-1" />
-                    Офлайн
-                  </span>
-                )}
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+            </div>
+          )}
 
-    {/* Пагинация */}
-    {totalPages > 1 && (
-      <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-700">
-            Показано <span className="font-medium">{events.length}</span> из{' '}
-            <span className="font-medium">{totalCount}</span> событий
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handlePrevPage}
-              disabled={page === 1}
-              className="inline-flex items-center px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-            >
-              <ChevronLeftIcon className="h-4 w-4" />
-            </button>
-            <span className="text-sm text-gray-700">
-              Страница {page} из {totalPages}
-            </span>
-            <button
-              onClick={handleNextPage}
-              disabled={page === totalPages}
-              className="inline-flex items-center px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-            >
-              <ChevronRightIcon className="h-4 w-4" />
-            </button>
-          </div>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Событие
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Организатор
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Статус
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Даты
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Участники
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Сессии
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {events.map(event => (
+                <tr 
+                  key={event.id} 
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigateToConference(event)}
+                >
+                  <td className="px-6 py-4">
+                    <div>
+                      <div className="font-medium text-gray-900 flex items-center justify-between">
+                        <span className="hover:text-blue-600">
+                          {event.name}
+                        </span>
+                        {!event.is_active && (
+                          <span className="ml-2 text-xs text-gray-500">(неактивно)</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500 truncate max-w-md">
+                        {event.description || 'Без описания'}
+                      </div>
+                    </div>
+                  </td>
+                  
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                        <UserIcon className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {event.owner.full_name || event.owner.username}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {event.owner.email}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex flex-col gap-1">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        event.is_open 
+                          ? 'bg-green-100 text-green-800 border border-green-200' 
+                          : 'bg-red-100 text-red-800 border border-red-200'
+                      }`}>
+                        {event.is_open ? 'Открыто' : 'Закрыто'}
+                      </span>
+                    </div>
+                  </td>
+                  
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div className="space-y-1">
+                      <div className="flex items-center">
+                        <CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
+                        <span>Создано: {formatDate(event.created_at)}</span>
+                      </div>
+                      {event.closes_at && (
+                        <div className="flex items-center">
+                          <ClockIcon className="h-4 w-4 text-gray-400 mr-2" />
+                          <span>Закрытие: {formatDate(event.closes_at)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-900">
+                        {event.participants_count}
+                      </div>
+                    </div>
+                  </td>
+                  
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex space-x-2">
+                      {event.has_online_sessions && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
+                          <VideoCameraIcon className="h-3 w-3 mr-1" />
+                          Онлайн
+                        </span>
+                      )}
+                      {event.has_offline_sessions && (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                          <MapPinIcon className="h-3 w-3 mr-1" />
+                          Офлайн
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Пагинация */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Показано <span className="font-medium">{events.length}</span> из{' '}
+                  <span className="font-medium">{totalCount}</span> событий
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handlePrevPage}
+                    disabled={page === 1}
+                    className="inline-flex items-center px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronLeftIcon className="h-4 w-4" />
+                  </button>
+                  <span className="text-sm text-gray-700">
+                    Страница {page} из {totalPages}
+                  </span>
+                  <button
+                    onClick={handleNextPage}
+                    disabled={page === totalPages}
+                    className="inline-flex items-center px-3 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    )}
-  </div>
-)}
+      )}
 
       {/* Нет данных */}
       {!loading && events.length === 0 && !error && (
         <div className="text-center py-12">
           <CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 mb-4">События не найдены</p>
+          <p className="text-gray-600 mb-4">
+            {nameSearch || searchTerm ? `События по запросу "${nameSearch || searchTerm}" не найдены` : 'События не найдены'}
+          </p>
           {Object.keys(filters).length > 0 ? (
             <button
               onClick={handleResetFilters}

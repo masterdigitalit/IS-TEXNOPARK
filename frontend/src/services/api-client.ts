@@ -4,15 +4,40 @@ import { jwtAuthService } from './auth';
 export const API_BASE_URL = 'http://localhost:8000';
 
 class ApiClient {
-  private async requestWithAuthRetry(url: string, options: RequestInit = {}): Promise<Response> {
+  private buildUrlWithParams(url: string, params?: Record<string, any>): string {
+    if (!params || Object.keys(params).length === 0) {
+      return url;
+    }
+
+    const urlObj = new URL(API_BASE_URL + url);
+    
+    // Очищаем существующие параметры, чтобы не дублировать
+    urlObj.search = '';
+    
+    // Добавляем новые параметры
+    Object.keys(params).forEach(key => {
+      const value = params[key];
+      if (value !== undefined && value !== null && value !== '') {
+        urlObj.searchParams.append(key, String(value));
+      }
+    });
+    
+    // Возвращаем только pathname и query string (без base URL)
+    return urlObj.pathname + urlObj.search;
+  }
+
+  private async requestWithAuthRetry(url: string, options: RequestInit = {}, params?: Record<string, any>): Promise<Response> {
     let accessToken = jwtAuthService.getAccessToken();
     
     if (!accessToken) {
       throw new Error('No authentication token');
     }
 
+    // Добавляем параметры к URL
+    const fullUrl = this.buildUrlWithParams(url, params);
+
     // Первый запрос с текущим токеном
-    let response = await fetch(API_BASE_URL + url, {
+    let response = await fetch(API_BASE_URL + fullUrl, {
       ...options,
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -28,7 +53,7 @@ class ApiClient {
         accessToken = await jwtAuthService.refreshToken();
         
         // Повторяем запрос с новым токеном
-        response = await fetch(API_BASE_URL + url, {
+        response = await fetch(API_BASE_URL + fullUrl, {
           ...options,
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -52,12 +77,12 @@ class ApiClient {
     return response;
   }
 
-  // Базовые методы
-  async get<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+  // Базовые методы с поддержкой params
+  async get<T = any>(url: string, params?: Record<string, any>, options: RequestInit = {}): Promise<T> {
     const response = await this.requestWithAuthRetry(url, {
       ...options,
       method: 'GET',
-    });
+    }, params);
     return response.json();
   }
 
@@ -96,6 +121,5 @@ class ApiClient {
     return response.json();
   }
 }
- 
 
 export const apiClient = new ApiClient();
