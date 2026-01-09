@@ -4,40 +4,38 @@ import { jwtAuthService } from './auth';
 export const API_BASE_URL = 'http://localhost:8000';
 
 class ApiClient {
-  private buildUrlWithParams(url: string, params?: Record<string, any>): string {
+  // Метод для построения query string из параметров
+  private buildQueryString(params?: Record<string, any>): string {
     if (!params || Object.keys(params).length === 0) {
-      return url;
+      return '';
     }
-
-    const urlObj = new URL(API_BASE_URL + url);
     
-    // Очищаем существующие параметры, чтобы не дублировать
-    urlObj.search = '';
+    const searchParams = new URLSearchParams();
     
-    // Добавляем новые параметры
-    Object.keys(params).forEach(key => {
-      const value = params[key];
+    Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
-        urlObj.searchParams.append(key, String(value));
+        searchParams.append(key, String(value));
       }
     });
     
-    // Возвращаем только pathname и query string (без base URL)
-    return urlObj.pathname + urlObj.search;
+    const queryString = searchParams.toString();
+    return queryString ? `?${queryString}` : '';
   }
 
-  private async requestWithAuthRetry(url: string, options: RequestInit = {}, params?: Record<string, any>): Promise<Response> {
+  private async requestWithAuthRetry(url: string, options: RequestInit = {}): Promise<Response> {
     let accessToken = jwtAuthService.getAccessToken();
     
     if (!accessToken) {
       throw new Error('No authentication token');
     }
 
-    // Добавляем параметры к URL
-    const fullUrl = this.buildUrlWithParams(url, params);
+    // Добавляем базовый URL
+    const fullUrl = API_BASE_URL + url;
+    
+    console.log('Making request to:', fullUrl); // Для отладки
 
     // Первый запрос с текущим токеном
-    let response = await fetch(API_BASE_URL + fullUrl, {
+    let response = await fetch(fullUrl, {
       ...options,
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -53,7 +51,7 @@ class ApiClient {
         accessToken = await jwtAuthService.refreshToken();
         
         // Повторяем запрос с новым токеном
-        response = await fetch(API_BASE_URL + fullUrl, {
+        response = await fetch(fullUrl, {
           ...options,
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -77,12 +75,16 @@ class ApiClient {
     return response;
   }
 
-  // Базовые методы с поддержкой params
+  // Базовые методы
   async get<T = any>(url: string, params?: Record<string, any>, options: RequestInit = {}): Promise<T> {
-    const response = await this.requestWithAuthRetry(url, {
+    // Добавляем query параметры к URL
+    const queryString = this.buildQueryString(params);
+    const urlWithParams = `${url}${queryString}`;
+    
+    const response = await this.requestWithAuthRetry(urlWithParams, {
       ...options,
       method: 'GET',
-    }, params);
+    });
     return response.json();
   }
 

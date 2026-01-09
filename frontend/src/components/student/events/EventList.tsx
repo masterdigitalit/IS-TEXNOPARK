@@ -44,7 +44,7 @@ interface Event {
   participants_count: number;
   online_sessions_count?: number;
   offline_sessions_count?: number;
-  slug?: string; // Добавляем slug для перехода на конференцию
+  slug?: string;
 }
 
 interface ApiResponse {
@@ -67,7 +67,6 @@ interface EventFilters {
 export const EventListPublic: React.FC = () => {
   const navigate = useNavigate();
   
-  // Состояния
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -76,7 +75,7 @@ export const EventListPublic: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [nameSearch, setNameSearch] = useState(''); // Добавлен отдельный поиск по названию
+  const [nameSearch, setNameSearch] = useState('');
   const [filters, setFilters] = useState<EventFilters>({});
   const pageSize = 15;
 
@@ -86,7 +85,8 @@ export const EventListPublic: React.FC = () => {
     setError('');
     
     try {
-      const params: any = {
+      // Создаем объект с параметрами
+      const requestParams: any = {
         page: pageNumber,
         page_size: pageSize,
         ...filters
@@ -94,14 +94,15 @@ export const EventListPublic: React.FC = () => {
       
       // Добавляем поиск по названию если есть
       if (nameSearch) {
-        params.search = nameSearch;
-      }
-      // Или добавляем общий поиск если есть (для совместимости)
-      else if (searchTerm) {
-        params.search = searchTerm;
+        requestParams.search = nameSearch;
+      } else if (searchTerm) {
+        requestParams.search = searchTerm;
       }
       
-      const response = await apiClient.get<ApiResponse>('/api/v1/events/', { params });
+      console.log('Sending params:', requestParams); // Для отладки
+      
+      // Передаем параметры вторым аргументом напрямую
+      const response = await apiClient.get<ApiResponse>('/api/v1/events/', requestParams);
       
       setEvents(response.results);
       setTotalCount(response.count);
@@ -120,32 +121,12 @@ export const EventListPublic: React.FC = () => {
     loadEvents(1);
   }, [filters]);
 
-  // Обработчики
   const handlePrevPage = () => {
     if (page > 1) loadEvents(page - 1);
   };
 
   const handleNextPage = () => {
     if (page < totalPages) loadEvents(page + 1);
-  };
-
-  const handleSearch = () => {
-    if (nameSearch.trim()) {
-      setFilters(prev => ({
-        ...prev,
-        search: nameSearch.trim()
-      }));
-    } else if (searchTerm.trim()) {
-      setFilters(prev => ({
-        ...prev,
-        search: searchTerm.trim()
-      }));
-    } else {
-      // Убираем поиск из фильтров если оба поля пустые
-      const { search, ...otherFilters } = filters;
-      setFilters(otherFilters);
-    }
-    setPage(1);
   };
 
   const handleNameSearch = () => {
@@ -155,7 +136,19 @@ export const EventListPublic: React.FC = () => {
         search: nameSearch.trim()
       }));
     } else {
-      // Убираем поиск из фильтров если поле пустое
+      const { search, ...otherFilters } = filters;
+      setFilters(otherFilters);
+    }
+    setPage(1);
+  };
+
+  const handleSearch = () => {
+    if (searchTerm.trim()) {
+      setFilters(prev => ({
+        ...prev,
+        search: searchTerm.trim()
+      }));
+    } else {
       const { search, ...otherFilters } = filters;
       setFilters(otherFilters);
     }
@@ -177,96 +170,14 @@ export const EventListPublic: React.FC = () => {
     setPage(1);
   };
 
-  // Обработка нажатия Enter в поле поиска по названию
   const handleNameSearchKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleNameSearch();
-    }
+    if (e.key === 'Enter') handleNameSearch();
   };
 
-  // Обработка нажатия Enter в общем поле поиска
   const handleSearchKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
+    if (e.key === 'Enter') handleSearch();
   };
 
-  const toggleEventStatus = async (eventId: number, currentStatus: boolean) => {
-    try {
-      await apiClient.patch(`/api/v1/events/${eventId}/`, {
-        is_active: !currentStatus,
-      });
-      
-      setEvents(prevEvents => 
-        prevEvents.map(event => 
-          event.id === eventId 
-            ? { ...event, is_active: !currentStatus }
-            : event
-        )
-      );
-      
-    } catch (err: any) {
-      setError(err.message || 'Не удалось обновить статус');
-    }
-  };
-
-  const changeEventStatus = async (eventId: number, newStatus: Event['status']) => {
-    try {
-      await apiClient.patch(`/api/v1/events/${eventId}/`, {
-        status: newStatus,
-      });
-      
-      setEvents(prevEvents => 
-        prevEvents.map(event => 
-          event.id === eventId 
-            ? { 
-                ...event, 
-                status: newStatus,
-                status_display: newStatus === 'published' ? 'Опубликовано' :
-                              newStatus === 'draft' ? 'Черновик' :
-                              newStatus === 'cancelled' ? 'Отменено' : 'Завершено'
-              }
-            : event
-        )
-      );
-      
-    } catch (err: any) {
-      setError(err.message || 'Не удалось изменить статус');
-    }
-  };
-
-  const deleteEvent = async (eventId: number) => {
-    if (!window.confirm('Вы уверены, что хотите удалить это событие? Это действие нельзя отменить.')) {
-      return;
-    }
-    
-    try {
-      await apiClient.delete(`/api/v1/events/${eventId}/`);
-      setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
-      setTotalCount(prev => prev - 1);
-      
-    } catch (err: any) {
-      setError(err.message || 'Не удалось удалить событие');
-    }
-  };
-
-  // Навигация
-  const navigateToEventDetails = (eventId: number) => {
-    navigate(`/admin/events/${eventId}`);
-  };
-
-  const navigateToCreateEvent = () => {
-    navigate('/admin/events/create');
-  };
-
-  // Переход на страницу конференции (публичный доступ)
-  const navigateToConference = (event: Event) => {
-    // Используем slug или ID для перехода
-    const path =  `events/${event.id}`;
-    window.open(path, '_blank');
-  };
-
-  // Форматирование
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Не указана';
     try {
@@ -282,23 +193,12 @@ export const EventListPublic: React.FC = () => {
     }
   };
 
-  // Статистика
   const activeEvents = events.filter(e => e.is_active).length;
   const publishedEvents = events.filter(e => e.status === 'published').length;
-  const draftEvents = events.filter(e => e.status === 'draft').length;
   const eventsWithOnline = events.filter(e => e.has_online_sessions).length;
-
-  // Фильтрация по названию на клиенте (альтернативный вариант)
-  const filteredEvents = nameSearch.trim() 
-    ? events.filter(event => 
-        event.name.toLowerCase().includes(nameSearch.toLowerCase()) ||
-        (event.description && event.description.toLowerCase().includes(nameSearch.toLowerCase()))
-      )
-    : events;
 
   return (
     <div className="p-6">
-      {/* Заголовок и кнопки */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">События</h1>
@@ -314,7 +214,7 @@ export const EventListPublic: React.FC = () => {
             Обновить
           </button>
           <button
-            onClick={navigateToCreateEvent}
+            onClick={() => navigate('/admin/events/create')}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <PlusIcon className="h-5 w-5 mr-2" />
@@ -323,7 +223,6 @@ export const EventListPublic: React.FC = () => {
         </div>
       </div>
 
-      {/* Панель статистики */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
           <div className="text-sm text-gray-500">Всего событий</div>
@@ -343,10 +242,8 @@ export const EventListPublic: React.FC = () => {
         </div>
       </div>
 
-      {/* Поиск и фильтры */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4 mb-4">
-          {/* Поиск по названию */}
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Поиск по названию
@@ -366,7 +263,6 @@ export const EventListPublic: React.FC = () => {
             </div>
           </div>
 
-          {/* Кнопки для поиска по названию */}
           <div className="flex items-end">
             <button
               onClick={handleNameSearch}
@@ -390,7 +286,6 @@ export const EventListPublic: React.FC = () => {
           </div>
         </div>
 
-        {/* Расширенный поиск (сворачиваемый) */}
         <div className="mb-4">
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -404,7 +299,6 @@ export const EventListPublic: React.FC = () => {
         {showFilters && (
           <div className="pt-4 border-t border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              {/* Общий поиск (опционально, можно удалить если не нужен) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Общий поиск
@@ -496,7 +390,6 @@ export const EventListPublic: React.FC = () => {
         )}
       </div>
 
-      {/* Ошибка */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-center">
@@ -512,7 +405,6 @@ export const EventListPublic: React.FC = () => {
         </div>
       )}
 
-      {/* Загрузка */}
       {loading && (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -520,10 +412,8 @@ export const EventListPublic: React.FC = () => {
         </div>
       )}
 
-      {/* Таблица событий */}
       {!loading && events.length > 0 && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {/* Показать результаты поиска по названию (если применимо) */}
           {nameSearch && (
             <div className="px-6 py-3 bg-blue-50 border-b border-blue-200">
               <div className="flex items-center justify-between">
@@ -573,7 +463,7 @@ export const EventListPublic: React.FC = () => {
                 <tr 
                   key={event.id} 
                   className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => navigateToConference(event)}
+                  onClick={() => window.open(`events/${event.id}`, '_blank')}
                 >
                   <td className="px-6 py-4">
                     <div>
@@ -663,7 +553,6 @@ export const EventListPublic: React.FC = () => {
             </tbody>
           </table>
 
-          {/* Пагинация */}
           {totalPages > 1 && (
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
               <div className="flex items-center justify-between">
@@ -696,7 +585,6 @@ export const EventListPublic: React.FC = () => {
         </div>
       )}
 
-      {/* Нет данных */}
       {!loading && events.length === 0 && !error && (
         <div className="text-center py-12">
           <CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -712,7 +600,7 @@ export const EventListPublic: React.FC = () => {
             </button>
           ) : (
             <button
-              onClick={navigateToCreateEvent}
+              onClick={() => navigate('/admin/events/create')}
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               <PlusIcon className="h-5 w-5 mr-2" />
