@@ -22,6 +22,10 @@ class ApiClient {
     return queryString ? `?${queryString}` : '';
   }
 
+  private isFormData(body: any): boolean {
+    return body instanceof FormData;
+  }
+
   private async requestWithAuthRetry(url: string, options: RequestInit = {}): Promise<Response> {
     let accessToken = jwtAuthService.getAccessToken();
     
@@ -32,17 +36,34 @@ class ApiClient {
     // Добавляем базовый URL
     const fullUrl = API_BASE_URL + url;
     
-    console.log('Making request to:', fullUrl); // Для отладки
+    console.log('Making request to:', fullUrl, 'Method:', options.method);
+
+    // Подготавливаем headers
+    const headers: HeadersInit = {
+      'Authorization': `Bearer ${accessToken}`,
+    };
+
+    // Только для НЕ FormData устанавливаем Content-Type
+    if (!this.isFormData(options.body)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // Объединяем headers
+    const finalHeaders = {
+      ...headers,
+      ...options.headers,
+    };
+
+    console.log('Request headers:', finalHeaders);
+    console.log('Is FormData:', this.isFormData(options.body));
 
     // Первый запрос с текущим токеном
     let response = await fetch(fullUrl, {
       ...options,
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers: finalHeaders,
     });
+
+    console.log('Response status:', response.status);
 
     // Если токен истек (401 ошибка), пробуем обновить
     if (response.status === 401) {
@@ -50,15 +71,16 @@ class ApiClient {
         // Обновляем access token
         accessToken = await jwtAuthService.refreshToken();
         
+        // Обновляем заголовок с новым токеном
+        finalHeaders['Authorization'] = `Bearer ${accessToken}`;
+        
         // Повторяем запрос с новым токеном
         response = await fetch(fullUrl, {
           ...options,
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            ...options.headers,
-          },
+          headers: finalHeaders,
         });
+
+        console.log('Retry response status:', response.status);
       } catch (refreshError) {
         // Если refresh не удался - разлогиниваем
         jwtAuthService.logout();
@@ -68,7 +90,14 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      console.error('Response not OK, status:', response.status);
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error('Error response data:', errorData);
+      } catch (e) {
+        errorData = {};
+      }
       throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
     }
 
@@ -88,11 +117,11 @@ class ApiClient {
     return response.json();
   }
 
-  async post<T = any>(url: string, data: any, options: RequestInit = {}): Promise<T> {
+  async post<T = any>(url: string, data?: any, options: RequestInit = {}): Promise<T> {
     const response = await this.requestWithAuthRetry(url, {
       ...options,
       method: 'POST',
-      body: JSON.stringify(data),
+      body: this.isFormData(data) ? data : JSON.stringify(data),
     });
     return response.json();
   }
@@ -101,7 +130,7 @@ class ApiClient {
     const response = await this.requestWithAuthRetry(url, {
       ...options,
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: this.isFormData(data) ? data : JSON.stringify(data),
     });
     return response.json();
   }
@@ -110,7 +139,7 @@ class ApiClient {
     const response = await this.requestWithAuthRetry(url, {
       ...options,
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: this.isFormData(data) ? data : JSON.stringify(data),
     });
     return response.json();
   }
@@ -121,6 +150,11 @@ class ApiClient {
       method: 'DELETE',
     });
     return response.json();
+  }
+
+  // Специальный метод для загрузки файлов
+  async uploadFile<T = any>(url: string, formData: FormData): Promise<T> {
+    return this.post(url, formData);
   }
 }
 
