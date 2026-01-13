@@ -5,24 +5,24 @@ from . import views
 
 router = DefaultRouter()
 
-# Регистрируем все ViewSets
-router.register(r'events', views.EventViewSet, basename='event')
-router.register(r'event-participants', views.EventParticipantViewSet, basename='eventparticipant')
-router.register(r'online-sessions', views.OnlineEventInfoViewSet, basename='onlineeventinfo')
-router.register(r'offline-sessions', views.OfflineSessionsInfoViewSet, basename='offlinesessionsinfo')
-router.register(r'session-attendances', views.SessionAttendanceViewSet, basename='sessionattendance')
-router.register(r'session-materials', views.SessionMaterialViewSet, basename='sessionmaterial')
-
 urlpatterns = [
-    path('', include(router.urls)),
+    # Основные пути для событий
+    path('events/all/', views.EventViewSet.as_view({'get': 'list'}), name='events-all'),
     
-    # Дополнительные endpoints для удобства
-    path('events/events/<int:pk>/join/', views.EventViewSet.as_view({'post': 'join'}), name='event-join'),
-    path('events/events/<int:pk>/leave/', views.EventViewSet.as_view({'post': 'leave'}), name='event-leave'),
-    path('events/events/<int:pk>/participants/', views.EventViewSet.as_view({'get': 'participants'}), name='event-participants'),
-    path('events/events/my/', views.EventViewSet.as_view({'get': 'my_events'}), name='my-events'),
-    path('events/events/participating/', views.EventViewSet.as_view({'get': 'participating'}), name='participating-events'),
-    path('events/events/upcoming/', views.EventViewSet.as_view({'get': 'upcoming'}), name='upcoming-events'),
+    path('events/<int:pk>/', views.EventViewSet.as_view({
+        'get': 'retrieve',
+        'put': 'update',
+        'patch': 'partial_update',
+        'delete': 'destroy'
+    }), name='events-detail'),
+   
+    # ... остальные ваши пути без изменений
+    path('events/<int:pk>/join/', views.EventViewSet.as_view({'post': 'join'}), name='event-join'),
+    path('events/<int:pk>/leave/', views.EventViewSet.as_view({'post': 'leave'}), name='event-leave'),
+    path('events/<int:pk>/participants/', views.EventViewSet.as_view({'get': 'participants'}), name='event-participants'),
+    path('events/my/', views.EventViewSet.as_view({'get': 'my_events'}), name='my-events'),
+    path('events/participating/', views.EventViewSet.as_view({'get': 'participating'}), name='participating-events'),
+    path('events/upcoming/', views.EventViewSet.as_view({'get': 'upcoming'}), name='upcoming-events'),
     
     path('events/online-sessions/<int:pk>/join/', views.OnlineEventInfoViewSet.as_view({'post': 'join'}), name='session-join'),
     path('events/online-sessions/<int:pk>/leave/', views.OnlineEventInfoViewSet.as_view({'post': 'leave'}), name='session-leave'),

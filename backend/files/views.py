@@ -19,6 +19,29 @@ from .serializers import (
 )
 from .permissions import IsOwnerOrPublic, IsFileOwner
 
+# files/views.py
+from rest_framework import viewsets, permissions, status, generics, filters
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from django.http import HttpResponse, FileResponse
+from django.core.files.storage import default_storage
+from django.db import models
+import mimetypes
+import os
+
+from .models import StorageFile, FileShareLink
+from .serializers import (
+    StorageFileSerializer, FileUploadSerializer,
+    FileShareLinkSerializer, FileSearchSerializer,
+    EventFileSerializer
+)
+from .permissions import IsOwnerOrPublic, IsFileOwner
+
 
 class StorageFileViewSet(viewsets.ModelViewSet):
     """ViewSet для работы с файлами"""
@@ -36,7 +59,7 @@ class StorageFileViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             # Для просмотра списка и деталей - доступно всем
             permission_classes = [permissions.AllowAny]
-        elif self.action in ['create', 'upload_multiple']:
+        elif self.action in ['create', 'upload', 'upload_multiple']:
             # Для загрузки - только аутентифицированным
             permission_classes = [permissions.IsAuthenticated]
         else:
@@ -47,6 +70,18 @@ class StorageFileViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Фильтрация файлов"""
         queryset = super().get_queryset()
+        
+        # Фильтрация по событию
+        event_id = self.request.query_params.get('event')
+        if event_id:
+            try:
+                from events.models import EventFile
+                event_file_ids = EventFile.objects.filter(
+                    event_id=event_id
+                ).values_list('storage_file_id', flat=True)
+                queryset = queryset.filter(id__in=event_file_ids)
+            except ImportError:
+                pass
         
         # Для неавторизованных пользователей показываем только публичные файлы
         if not self.request.user.is_authenticated:
@@ -60,12 +95,11 @@ class StorageFileViewSet(viewsets.ModelViewSet):
             )
         
         # Админы видят всё
-        
         return queryset
     
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser])
     def upload(self, request):
-        """Загрузка одного файла"""
+        """Загрузка одного файла с возможной привязкой к событию"""
         serializer = FileUploadSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             storage_file = serializer.save()
@@ -87,7 +121,10 @@ class StorageFileViewSet(viewsets.ModelViewSet):
                 'name': request.data.get('name') or file.name,
                 'category': request.data.get('category'),
                 'description': request.data.get('description', ''),
-                'is_public': request.data.get('is_public', True)
+                'is_public': request.data.get('is_public', True),
+                'event_id': request.data.get('event_id'),
+                'event_category': request.data.get('event_category', 'document'),
+                'event_description': request.data.get('event_description', '')
             }, context={'request': request})
             
             if serializer.is_valid():
@@ -156,6 +193,16 @@ class StorageFileViewSet(viewsets.ModelViewSet):
         if data.get('is_public') is not None:
             queryset = queryset.filter(is_public=data['is_public'])
         
+        if data.get('event_id'):
+            try:
+                from events.models import EventFile
+                event_file_ids = EventFile.objects.filter(
+                    event_id=data['event_id']
+                ).values_list('storage_file_id', flat=True)
+                queryset = queryset.filter(id__in=event_file_ids)
+            except ImportError:
+                pass
+        
         # Пагинация
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -164,6 +211,74 @@ class StorageFileViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def events(self, request, pk=None):
+        """Получить события, к которым прикреплен файл"""
+        storage_file = self.get_object()
+        
+        try:
+            from events.models import EventFile
+            from events.serializers import EventSerializer
+            
+            event_files = EventFile.objects.filter(storage_file=storage_file).select_related('event')
+            events = [ef.event for ef in event_files]
+            
+            serializer = EventSerializer(events, many=True, context={'request': request})
+            return Response(serializer.data)
+        except ImportError:
+            return Response({'error': 'Не удалось загрузить информацию о событиях'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['post'])
+    def attach_to_event(self, request, pk=None):
+        """Прикрепить файл к событию"""
+        storage_file = self.get_object()
+        
+        event_id = request.data.get('event_id')
+        if not event_id:
+            return Response({'error': 'Не указан event_id'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from events.models import Event, EventFile, EventParticipant
+            
+            event = Event.objects.get(id=event_id)
+            
+            # Проверяем права доступа
+            if not (event.owner == request.user or 
+                   EventParticipant.objects.filter(event=event, user=request.user, is_confirmed=True).exists()):
+                return Response({'error': 'Нет доступа к этому событию'}, 
+                              status=status.HTTP_403_FORBIDDEN)
+            
+            # Проверяем, не привязан ли уже файл к этому событию
+            if EventFile.objects.filter(event=event, storage_file=storage_file).exists():
+                return Response({'error': 'Файл уже прикреплен к этому событию'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Создаем связь
+            event_file = EventFile.objects.create(
+                event=event,
+                storage_file=storage_file,
+                category=request.data.get('category', 'document'),
+                description=request.data.get('description', ''),
+                is_public=request.data.get('is_public', True),
+                uploaded_by=request.user
+            )
+            
+            return Response({
+                'message': 'Файл успешно прикреплен к событию',
+                'event_file_id': event_file.id,
+                'event_id': event.id,
+                'event_name': event.name
+            }, status=status.HTTP_201_CREATED)
+            
+        except Event.DoesNotExist:
+            return Response({'error': 'Событие не найдено'}, 
+                          status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': f'Ошибка при прикреплении файла: {str(e)}'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['get'])
     def share_links(self, request, pk=None):
@@ -199,6 +314,14 @@ class StorageFileViewSet(viewsets.ModelViewSet):
         """Статистика по файлу"""
         storage_file = self.get_object()
         
+        # Получаем информацию о связанных событиях
+        event_files_count = 0
+        try:
+            from events.models import EventFile
+            event_files_count = EventFile.objects.filter(storage_file=storage_file).count()
+        except ImportError:
+            pass
+        
         stats = {
             'file_name': storage_file.name,
             'file_size': storage_file.file_size_display,
@@ -208,11 +331,11 @@ class StorageFileViewSet(viewsets.ModelViewSet):
             'category': storage_file.get_category_display(),
             'is_public': storage_file.is_public,
             'share_links_count': storage_file.share_links.count(),
-            'active_share_links': storage_file.share_links.filter(is_active=True).count()
+            'active_share_links': storage_file.share_links.filter(is_active=True).count(),
+            'event_files_count': event_files_count
         }
         
         return Response(stats)
-
 
 class FileShareLinkViewSet(viewsets.ModelViewSet):
     """ViewSet для управления ссылками доступа"""
@@ -309,3 +432,69 @@ def preview_shared_file(request, token):
     return response
 
 # Create your views here.
+
+
+
+
+# files/views.py (добавить)
+
+class EventFileViewSet(viewsets.ModelViewSet):
+    """ViewSet для работы с файлами конкретного события"""
+    serializer_class = EventFileSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Получаем файлы только для указанного события"""
+        event_id = self.kwargs.get('event_pk')
+        return EventFile.objects.filter(event_id=event_id)
+    
+    def perform_create(self, serializer):
+        """Автоматически устанавливаем текущего пользователя"""
+        serializer.save(uploaded_by=self.request.user)
+    
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser])
+    def upload(self, request, event_pk=None):
+        """Загрузка файла для конкретного события"""
+        try:
+            event = Event.objects.get(id=event_pk)
+        except Event.DoesNotExist:
+            return Response(
+                {'error': 'Событие не найдено'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Проверяем права доступа к событию
+        if not self.has_event_access(request.user, event):
+            return Response(
+                {'error': 'Нет доступа к этому событию'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = FileUploadWithEventSerializer(
+            data=request.data, 
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            # Добавляем event_id в данные
+            serializer.validated_data['event_id'] = event.id
+            storage_file = serializer.save()
+            
+            # Создаем связь
+            EventFile.objects.create(
+                event=event,
+                file=storage_file,
+                uploaded_by=request.user
+            )
+            
+            return Response(
+                StorageFileSerializer(storage_file, context={'request': request}).data,
+                status=status.HTTP_201_CREATED
+            )
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def has_event_access(self, user, event):
+        """Проверка доступа пользователя к событию"""
+        # Реализуйте логику проверки доступа
+        return True  # Замените на вашу логику

@@ -78,6 +78,21 @@ class Event(models.Model):
         verbose_name=_('Приватное мероприятие')
     )
     
+    registration_ends_at = models.DateTimeField(
+        verbose_name=_('Дата окончания регистрации'),
+        blank=True,
+        null=True,
+        help_text=_('Дата и время окончания регистрации участников')
+    )
+    
+    # ⭐ ДОБАВЛЕНО: Дата подведения итогов
+    results_published_at = models.DateTimeField(
+        verbose_name=_('Дата подведения итогов'),
+        blank=True,
+        null=True,
+        help_text=_('Дата и время публикации итогов события')
+    )
+    
     class Meta:
         verbose_name = _('Событие')
         verbose_name_plural = _('События')
@@ -153,6 +168,209 @@ class Event(models.Model):
         if self.closes_at:
             return timezone.now() <= self.closes_at
         return True
+    
+    # ============= НОВЫЕ СВОЙСТВА ДЛЯ АДМИНКИ =============
+    
+    @property
+    def registration_status(self):
+        """Статус регистрации"""
+        now = timezone.now()
+        
+        if not self.is_active or self.status != 'published':
+            return {
+                'status': 'closed',
+                'display': 'Регистрация закрыта',
+                'is_active': False,
+                'is_ended': True,
+                'reason': 'Событие не активно'
+            }
+        
+        if not self.registration_ends_at:
+            return {
+                'status': 'not_started',
+                'display': 'Регистрация не началась',
+                'is_active': False,
+                'is_ended': False,
+                'reason': 'Дата окончания регистрации не указана'
+            }
+        
+        if self.registration_ends_at > now:
+            return {
+                'status': 'active',
+                'display': 'Идет регистрация',
+                'is_active': True,
+                'is_ended': False,
+                'time_left': self.registration_ends_at - now
+            }
+        else:
+            return {
+                'status': 'ended',
+                'display': 'Регистрация закрыта',
+                'is_active': False,
+                'is_ended': True,
+                'ended_at': self.registration_ends_at
+            }
+    
+    @property
+    def results_status(self):
+        """Статус результатов"""
+        now = timezone.now()
+        
+        if not self.results_published_at:
+            return {
+                'status': 'not_ready',
+                'display': 'Не готовы',
+                'is_published': False
+            }
+        
+        if self.results_published_at > now:
+            return {
+                'status': 'in_preparation',
+                'display': 'В подготовке',
+                'is_published': False,
+                'publish_at': self.results_published_at
+            }
+        else:
+            return {
+                'status': 'published',
+                'display': 'Опубликованы',
+                'is_published': True,
+                'published_at': self.results_published_at
+            }
+    
+    @property
+    def sessions_status(self):
+        """Статус сессий"""
+        online_count = self.online_sessions.filter(status='ongoing').count()
+        offline_count = self.offline_sessions.filter(status='ongoing').count()
+        scheduled_online = self.online_sessions.filter(status='scheduled').count()
+        scheduled_offline = self.offline_sessions.filter(status='scheduled').count()
+        
+        if online_count > 0 or offline_count > 0:
+            return {
+                'is_ongoing': True,
+                'has_scheduled': scheduled_online > 0 or scheduled_offline > 0,
+                'display': 'Идут сессии',
+                'online_count': online_count,
+                'offline_count': offline_count
+            }
+        elif scheduled_online > 0 or scheduled_offline > 0:
+            return {
+                'is_ongoing': False,
+                'has_scheduled': True,
+                'display': 'Запланированы сессии',
+                'scheduled_count': scheduled_online + scheduled_offline
+            }
+        else:
+            return {
+                'is_ongoing': False,
+                'has_scheduled': False,
+                'display': 'Нет активных сессий'
+            }
+    
+    @property
+    def current_stage(self):
+        """Текущий этап события"""
+        now = timezone.now()
+        reg_status = self.registration_status
+        res_status = self.results_status
+        sess_status = self.sessions_status
+        
+        # Регистрация
+        if reg_status['is_active']:
+            return {
+                'name': 'registration',
+                'display': 'Регистрация',
+                'status': 'active',
+                'detail': f'До {self.registration_ends_at.strftime("%d.%m.%Y %H:%M")}' if self.registration_ends_at else 'Без ограничений'
+            }
+        
+        # Сессии
+        if sess_status['is_ongoing']:
+            return {
+                'name': 'sessions',
+                'display': 'Сессии',
+                'status': 'active',
+                'detail': f'Идет {sess_status.get("online_count", 0) + sess_status.get("offline_count", 0)} сессий'
+            }
+        
+        # Результаты
+        if res_status['is_published']:
+            return {
+                'name': 'results',
+                'display': 'Результаты',
+                'status': 'active',
+                'detail': f'Опубликованы {self.results_published_at.strftime("%d.%m.%Y %H:%M")}' if self.results_published_at else 'Опубликованы'
+            }
+        elif res_status['status'] == 'in_preparation':
+            return {
+                'name': 'results',
+                'display': 'Ожидание результатов',
+                'status': 'pending',
+                'detail': f'Ожидаются {self.results_published_at.strftime("%d.%m.%Y %H:%M")}' if self.results_published_at else 'В подготовке'
+            }
+        
+        # Подготовка (между регистрацией и сессиями)
+        if reg_status['is_ended'] and not sess_status['has_scheduled']:
+            return {
+                'name': 'preparation',
+                'display': 'Подготовка',
+                'status': 'active'
+            }
+        
+        # Не началось
+        if reg_status['status'] == 'not_started':
+            return {
+                'name': 'not_started',
+                'display': 'Не началось',
+                'status': 'pending'
+            }
+        
+        # Завершено
+        if self.status == 'completed':
+            return {
+                'name': 'completed',
+                'display': 'Завершено',
+                'status': 'completed'
+            }
+        
+        return {
+            'name': 'unknown',
+            'display': 'Не определено',
+            'status': 'unknown'
+        }
+    
+    @property
+    def progress_percentage(self):
+        """Процент прогресса события"""
+        now = timezone.now()
+        stages = ['not_started', 'registration', 'preparation', 'sessions', 'results', 'completed']
+        current_stage = self.current_stage['name']
+        
+        if current_stage == 'completed':
+            return 100
+        
+        try:
+            stage_index = stages.index(current_stage)
+            return int((stage_index / (len(stages) - 1)) * 100)
+        except (ValueError, ZeroDivisionError):
+            return 0
+    
+    @property
+    def online_sessions_status(self):
+        """Статус онлайн сессий (для фильтрации)"""
+        if self.online_sessions.filter(status='ongoing').exists():
+            return 'ongoing'
+        return 'none'
+    
+    @property
+    def offline_sessions_status(self):
+        """Статус оффлайн сессий (для фильтрации)"""
+        if self.offline_sessions.filter(status='ongoing').exists():
+            return 'ongoing'
+        return 'none'
+    
+    # ============= КОНЕЦ НОВЫХ СВОЙСТВ =============
     
     def clean(self):
         """Валидация модели"""
@@ -255,7 +473,6 @@ class EventParticipant(models.Model):
             models.Index(fields=['event', 'user']),
             models.Index(fields=['is_confirmed']),
         ]
-    
     
     def __str__(self):
         # Безопасный метод __str__ для EventParticipant

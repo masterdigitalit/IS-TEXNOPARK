@@ -2,6 +2,7 @@
 from rest_framework import viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Exists, OuterRef
 from django.utils import timezone
@@ -15,10 +16,21 @@ from .serializers import (
     OnlineEventInfoSerializer, OnlineEventInfoDetailSerializer,
     SessionAttendanceSerializer, SessionMaterialSerializer,
     OfflineSessionsInfoSerializer, UserSimpleSerializer,
-    EventWithParticipationSerializer  # Добавили новый сериализатор
+    EventWithParticipationSerializer
 )
 
 User = get_user_model()
+
+
+# ====================
+# Pagination Classes
+# ====================
+
+class EventPagination(PageNumberPagination):
+    """Пагинация для событий"""
+    page_size = 15
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 # ====================
@@ -69,7 +81,6 @@ class EventFilter(django_filters.FilterSet):
     closes_before = django_filters.DateTimeFilter(field_name='closes_at', lookup_expr='lte')
     search = django_filters.CharFilter(method='filter_search')
     
-    # Новые фильтры
     has_online_sessions = django_filters.BooleanFilter(method='filter_has_online_sessions')
     has_offline_sessions = django_filters.BooleanFilter(method='filter_has_offline_sessions')
     session_type = django_filters.ChoiceFilter(
@@ -151,6 +162,7 @@ class OnlineEventInfoFilter(django_filters.FilterSet):
 class EventViewSet(viewsets.ModelViewSet):
     """ViewSet для управления событиями"""
     queryset = Event.objects.all()
+    pagination_class = EventPagination  # Пагинация для основного списка
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = EventFilter
     search_fields = ['name', 'description']
@@ -178,6 +190,10 @@ class EventViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Возвращаем queryset в зависимости от пользователя"""
+        print(f"🔄 get_queryset вызван для URL: {self.request.path}")
+        print(f"👤 Пользователь: {self.request.user}")
+        print(f"🔑 Аутентифицирован: {self.request.user.is_authenticated}")
+        
         queryset = super().get_queryset()
         user = self.request.user
         
@@ -190,6 +206,7 @@ class EventViewSet(viewsets.ModelViewSet):
         
         if user.is_authenticated:
             if user.is_staff or user.is_superuser:
+                print("🎯 Режим: администратор - ВСЕ события (включая приватные)")
                 return queryset
             
             # Аннотируем, участвует ли пользователь в событии
@@ -200,15 +217,29 @@ class EventViewSet(viewsets.ModelViewSet):
             )
             queryset = queryset.annotate(is_participant=Exists(participations))
             
-            # Пользователи видят свои события, опубликованные и события, в которых участвуют
-            return queryset.filter(
-                Q(owner=user) | 
-                Q(status='published', is_active=True) |
-                Q(is_participant=True)
+            # Пользователи видят:
+            # 1. Свои события (владелец)
+            # 2. Публичные события (status='published', is_active=True, is_private=False)
+            # 3. Приватные события, в которых они участвуют
+            queryset = queryset.filter(
+                # Владелец события (видит все свои события, включая приватные)
+                Q(owner=user) |
+                # Публичные опубликованные события
+                Q(status='published', is_active=True, is_private=False) |
+                # Приватные события, в которых пользователь участвует
+                Q(is_private=True, is_participant=True)
             )
+            
+            print(f"📊 Пользователь видит {queryset.count()} событий")
+            return queryset
         
-        # Неаутентифицированные пользователи видят только опубликованные
-        return queryset.filter(status='published', is_active=True)
+        # Неаутентифицированные пользователи видят только публичные опубликованные события
+        print("🎯 Режим: аноним - только публичные опубликованные события")
+        return queryset.filter(
+            status='published', 
+            is_active=True, 
+            is_private=False
+        )
     
     def perform_create(self, serializer):
         """При создании события автоматически устанавливаем владельца"""
@@ -269,54 +300,37 @@ class EventViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def my_events(self, request):
-        """Получить события текущего пользователя"""
+        """Получить события текущего пользователя (БЕЗ ПАГИНАЦИИ)"""
         events = self.get_queryset().filter(owner=request.user)
-        page = self.paginate_queryset(events)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True, context={'request': request})
-            return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(events, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def participating(self, request):
-        """Получить события, в которых участвует пользователь"""
-        # Получаем ID событий, в которых пользователь участвует
+        """Получить события, в которых участвует пользователь (БЕЗ ПАГИНАЦИИ)"""
         event_ids = EventParticipant.objects.filter(
             user=request.user,
             is_confirmed=True
         ).values_list('event_id', flat=True)
         
-        # Получаем события
         queryset = self.get_queryset().filter(id__in=event_ids)
-        
-        # Пагинация
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True, context={'request': request})
-            return self.get_paginated_response(serializer.data)
-        
         serializer = self.get_serializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
-        """Предстоящие события"""
+        """Предстоящие события (БЕЗ ПАГИНАЦИИ)"""
         events = self.get_queryset().filter(
             status='published',
             is_active=True,
             closes_at__gt=timezone.now()
         )
-        page = self.paginate_queryset(events)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True, context={'request': request})
-            return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(events, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def participants(self, request, pk=None):
-        """Получить участников события"""
+        """Получить участников события (БЕЗ ПАГИНАЦИИ)"""
         event = self.get_object()
         participants = event.event_participants.filter(is_confirmed=True)
         serializer = EventParticipantSerializer(participants, many=True, context={'request': request})
@@ -324,7 +338,7 @@ class EventViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def online_sessions(self, request, pk=None):
-        """Получить все онлайн сессии события"""
+        """Получить все онлайн сессии события (БЕЗ ПАГИНАЦИИ)"""
         event = self.get_object()
         sessions = event.online_sessions.filter(is_active=True)
         serializer = OnlineEventInfoSerializer(sessions, many=True, context={'request': request})
@@ -332,7 +346,7 @@ class EventViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def offline_sessions(self, request, pk=None):
-        """Получить все офлайн сессии события"""
+        """Получить все офлайн сессии события (БЕЗ ПАГИНАЦИИ)"""
         event = self.get_object()
         sessions = event.offline_sessions.filter(is_active=True)
         serializer = OfflineSessionsInfoSerializer(sessions, many=True, context={'request': request})
@@ -340,7 +354,7 @@ class EventViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def upcoming_sessions(self, request, pk=None):
-        """Получить предстоящие сессии события"""
+        """Получить предстоящие сессии события (БЕЗ ПАГИНАЦИИ)"""
         event = self.get_object()
         
         online_sessions = event.online_sessions.filter(
@@ -448,6 +462,7 @@ class EventParticipantViewSet(viewsets.ModelViewSet):
 class OnlineEventInfoViewSet(viewsets.ModelViewSet):
     """ViewSet для управления онлайн-сессиями"""
     queryset = OnlineEventInfo.objects.all()
+    pagination_class = EventPagination  # Пагинация для основного списка
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = OnlineEventInfoFilter
     search_fields = ['session_name', 'session_notes']
@@ -570,7 +585,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
-        """Предстоящие онлайн-сессии"""
+        """Предстоящие онлайн-сессии (БЕЗ ПАГИНАЦИИ)"""
         sessions = self.get_queryset().filter(
             is_active=True,
             status='scheduled',
@@ -581,7 +596,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def ongoing(self, request):
-        """Текущие онлайн-сессии"""
+        """Текущие онлайн-сессии (БЕЗ ПАГИНАЦИИ)"""
         sessions = self.get_queryset().filter(
             is_active=True,
             status='ongoing'
@@ -591,7 +606,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def attendances(self, request, pk=None):
-        """Получить список посещаемости сессии"""
+        """Получить список посещаемости сессии (БЕЗ ПАГИНАЦИИ)"""
         session = self.get_object()
         attendances = session.attendances.all()
         serializer = SessionAttendanceSerializer(attendances, many=True, context={'request': request})
@@ -599,7 +614,7 @@ class OnlineEventInfoViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def materials(self, request, pk=None):
-        """Получить материалы сессии"""
+        """Получить материалы сессии (БЕЗ ПАГИНАЦИИ)"""
         session = self.get_object()
         materials = session.materials.filter(is_public=True)
         serializer = SessionMaterialSerializer(materials, many=True, context={'request': request})
@@ -618,6 +633,7 @@ class SessionAttendanceViewSet(viewsets.ModelViewSet):
     """ViewSet для управления посещаемостью сессий"""
     queryset = SessionAttendance.objects.all()
     serializer_class = SessionAttendanceSerializer
+    pagination_class = EventPagination  # Пагинация для основного списка
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['session', 'participant', 'status']
     ordering_fields = ['joined_at', 'left_at']
@@ -677,6 +693,7 @@ class SessionMaterialViewSet(viewsets.ModelViewSet):
     """ViewSet для управления материалами сессий"""
     queryset = SessionMaterial.objects.all()
     serializer_class = SessionMaterialSerializer
+    pagination_class = EventPagination  # Пагинация для основного списка
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['session', 'material_type', 'is_public', 'uploaded_by']
     search_fields = ['title', 'description']
@@ -719,6 +736,7 @@ class OfflineSessionsInfoViewSet(viewsets.ModelViewSet):
     """ViewSet для управления оффлайн-сессиями"""
     queryset = OfflineSessionsInfo.objects.all()
     serializer_class = OfflineSessionsInfoSerializer
+    pagination_class = EventPagination  # Пагинация для основного списка
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['event', 'status', 'is_active']
     search_fields = ['session_name', 'session_notes', 'address', 'room']
@@ -762,7 +780,7 @@ class OfflineSessionsInfoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
-        """Предстоящие оффлайн-сессии"""
+        """Предстоящие оффлайн-сессии (БЕЗ ПАГИНАЦИИ)"""
         sessions = self.get_queryset().filter(
             is_active=True,
             status='scheduled',

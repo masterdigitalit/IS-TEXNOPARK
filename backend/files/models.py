@@ -143,6 +143,17 @@ class StorageFile(models.Model):
             self.original_name = self.file.name
         
         super().save(*args, **kwargs)
+    @property
+    def events(self):
+        """События, к которым прикреплен файл"""
+        from events.models import EventFile
+        return EventFile.objects.filter(storage_file=self).select_related('event')
+    
+    @property
+    def event_files(self):
+        """Связи с событиями"""
+        from events.models import EventFile
+        return EventFile.objects.filter(storage_file=self)
 
 
 class FileShareLink(models.Model):
