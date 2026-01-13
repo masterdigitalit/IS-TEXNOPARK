@@ -14,7 +14,7 @@ export const RoleBasedRedirect: React.FC = () => {
           navigate('/admin/dashboard');
           break;
         case 'user':
-          navigate('/teacher/dashboard');
+          navigate('/user/dashboard');
           break;
        
         default:

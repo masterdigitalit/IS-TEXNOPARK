@@ -18,7 +18,16 @@ import {
   ArrowRightCircleIcon,
   BellAlertIcon,
   EnvelopeIcon,
-  PhoneIcon
+  DocumentIcon,
+  DocumentTextIcon,
+  PaperClipIcon,
+  CloudArrowUpIcon,
+  TrashIcon,
+  EyeIcon,
+  DocumentArrowDownIcon,
+  FolderIcon,
+  FolderPlusIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -75,6 +84,50 @@ interface Participant {
   is_confirmed: boolean;
 }
 
+// Типы для файлов
+interface FileCategory {
+  value: string;
+  label: string;
+}
+
+interface EventFile {
+  id: number;
+  category: string;
+  description: string;
+  is_public: boolean;
+  file_name: string;
+  file_size: number;
+  file_size_display: string;
+  file_url: string;
+  uploaded_at: string;
+  display_order: number;
+}
+
+// Общий интерфейс для отображения файлов
+interface DisplayFile {
+  id: number;
+  name: string;
+  original_name: string;
+  file_url: string;
+  category: string;
+  file_size: number;
+  file_size_display: string;
+  description: string | null;
+  is_public: boolean;
+  uploaded_by: User;
+  uploaded_at: string;
+  download_count: number;
+  mime_type?: string;
+}
+
+interface FileUploadForm {
+  name: string;
+  description: string;
+  category: string;
+  is_public: boolean;
+  file: File | null;
+}
+
 interface Event {
   id: number;
   owner: User;
@@ -93,6 +146,8 @@ interface Event {
   offline_sessions_count: number;
   participants_count: number;
   is_private: boolean;
+  files_count: number;
+  files: EventFile[];
   online_sessions: OnlineSession[];
   offline_sessions: OfflineSession[];
   participants: Participant[];
@@ -121,7 +176,7 @@ export const EventDetails: React.FC = () => {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'online' | 'offline'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'online' | 'offline' | 'files'>('overview');
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
   const [registrationLoading, setRegistrationLoading] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
@@ -133,6 +188,31 @@ export const EventDetails: React.FC = () => {
     notes: ''
   });
   
+  // Состояния для работы с файлами
+  const [files, setFiles] = useState<DisplayFile[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string>('');
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [fileForm, setFileForm] = useState<FileUploadForm>({
+    name: '',
+    description: '',
+    category: 'document',
+    is_public: true,
+    file: null
+  });
+  
+  // Категории файлов
+  const fileCategories: FileCategory[] = [
+    { value: 'image', label: 'Изображение' },
+    { value: 'document', label: 'Документ' },
+    { value: 'video', label: 'Видео' },
+    { value: 'audio', label: 'Аудио' },
+    { value: 'archive', label: 'Архив' },
+    { value: 'other', label: 'Другое' }
+  ];
+
   // Загрузка данных события
   const loadEventDetails = async () => {
     if (!id) return;
@@ -143,6 +223,26 @@ export const EventDetails: React.FC = () => {
     try {
       const response = await apiClient.get<Event>(`/api/v1/events/${id}/`);
       setEvent(response);
+      
+      // Преобразуем файлы события в формат для отображения
+      if (response.files && response.files.length > 0) {
+        const displayFiles: DisplayFile[] = response.files.map((file) => ({
+          id: file.id,
+          name: file.description || file.file_name,
+          original_name: file.file_name,
+          file_url: file.file_url,
+          category: file.category,
+          file_size: file.file_size,
+          file_size_display: file.file_size_display,
+          description: file.description,
+          is_public: file.is_public,
+          uploaded_by: response.owner,
+          uploaded_at: file.uploaded_at,
+          download_count: 0,
+          mime_type: getMimeTypeFromFileName(file.file_name)
+        }));
+        setFiles(displayFiles);
+      }
       
       // Если пользователь авторизован, предзаполняем форму и проверяем участие
       if (user) {
@@ -162,6 +262,45 @@ export const EventDetails: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Получение MIME типа по имени файла
+  const getMimeTypeFromFileName = (fileName: string): string => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    
+    const mimeTypes: Record<string, string> = {
+      // Images
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'bmp': 'image/bmp',
+      'svg': 'image/svg+xml',
+      'webp': 'image/webp',
+      
+      // Documents
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'txt': 'text/plain',
+      
+      // Archives
+      'zip': 'application/zip',
+      'rar': 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed',
+      
+      // Other
+      'json': 'application/json',
+      'xml': 'application/xml',
+      'yaml': 'application/x-yaml',
+      'yml': 'application/x-yaml'
+    };
+    
+    return mimeTypes[extension || ''] || 'application/octet-stream';
   };
 
   // Проверка участия пользователя в событии
@@ -184,6 +323,41 @@ export const EventDetails: React.FC = () => {
           registered_at: userParticipation.registered_at
         }
       } : null);
+    }
+  };
+
+  // Загрузка файлов события (резервный вариант)
+  const loadEventFiles = async () => {
+    if (!id || !user) return;
+    
+    setFilesLoading(true);
+    try {
+      // Пытаемся загрузить файлы через отдельный endpoint
+      const response = await apiClient.get<DisplayFile[]>(`/api/v1/files/?event=${id}`);
+      setFiles(response);
+    } catch (err: any) {
+      console.error('Ошибка загрузки файлов события:', err);
+      // Если не удалось загрузить отдельно, используем файлы из события
+      if (event?.files && event.files.length > 0) {
+        const displayFiles: DisplayFile[] = event.files.map((file) => ({
+          id: file.id,
+          name: file.description || file.file_name,
+          original_name: file.file_name,
+          file_url: file.file_url,
+          category: file.category,
+          file_size: file.file_size,
+          file_size_display: file.file_size_display,
+          description: file.description,
+          is_public: file.is_public,
+          uploaded_by: event.owner,
+          uploaded_at: file.uploaded_at,
+          download_count: 0,
+          mime_type: getMimeTypeFromFileName(file.file_name)
+        }));
+        setFiles(displayFiles);
+      }
+    } finally {
+      setFilesLoading(false);
     }
   };
 
@@ -218,8 +392,7 @@ export const EventDetails: React.FC = () => {
     
     try {
       // Используем ваш API endpoint для регистрации
-      const response = await apiClient.post(`/api/v1/events/events/${event.id}/join/`, {
-        // В зависимости от API, может потребоваться отправить данные формы
+      const response = await apiClient.post(`/api/v1/events/${event.id}/join/`, {
         notes: registrationForm.notes || '',
         phone: registrationForm.phone || ''
       });
@@ -266,7 +439,7 @@ export const EventDetails: React.FC = () => {
     
     try {
       // Используем ваш API endpoint для отмены регистрации
-      await apiClient.post(`/api/v1/events/events/${event.id}/leave/`);
+      await apiClient.post(`/api/v1/events/${event.id}/leave/`);
       
       // Обновляем данные события
       loadEventDetails();
@@ -284,10 +457,160 @@ export const EventDetails: React.FC = () => {
     }));
   };
 
+  // Обработчики для файлов
+  const handleUploadFile = () => {
+    if (!isParticipant && !isOwner) {
+      setError('Только участники могут загружать файлы');
+      return;
+    }
+    setShowUploadModal(true);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (file) {
+      setFileForm(prev => ({
+        ...prev,
+        file,
+        name: prev.name || file.name.split('.')[0]
+      }));
+    }
+  };
+
+  const handleFileFormChange = (field: keyof FileUploadForm, value: any) => {
+    setFileForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSubmitFile = async () => {
+    if (!fileForm.file || !event) {
+      setUploadError('Выберите файл для загрузки');
+      return;
+    }
+    
+    setUploadLoading(true);
+    setUploadError('');
+    
+    try {
+      const formData = new FormData();
+      formData.append('file', fileForm.file);
+      formData.append('name', fileForm.name);
+      
+      if (fileForm.description) {
+        formData.append('description', fileForm.description);
+      }
+      
+      formData.append('category', fileForm.category);
+      formData.append('is_public', fileForm.is_public.toString());
+      
+      // КЛЮЧЕВОЙ МОМЕНТ: Добавляем ID события для автоматической привязки
+      formData.append('event_id', event.id.toString());
+      formData.append('event_category', fileForm.category);
+      formData.append('event_description', fileForm.description || '');
+      
+      console.log('Загрузка файла с привязкой к событию:', event.id);
+      
+      // Используем endpoint для загрузки файлов
+      const response = await apiClient.post('/api/v1/files/upload/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      console.log('Файл загружен и привязан:', response);
+      
+      setUploadSuccess(true);
+      setFileForm({
+        name: '',
+        description: '',
+        category: 'document',
+        is_public: true,
+        file: null
+      });
+      
+      // Обновляем список файлов
+      setTimeout(() => {
+        loadEventFiles();
+        setUploadSuccess(false);
+        setShowUploadModal(false);
+      }, 1500);
+      
+    } catch (err: any) {
+      console.error('Ошибка загрузки файла:', err);
+      setUploadError(err.message || 'Не удалось загрузить файл');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleDeleteFile = async (fileId: number) => {
+    if (!window.confirm('Вы уверены, что хотите удалить этот файл?')) {
+      return;
+    }
+    
+    try {
+      await apiClient.delete(`/api/v1/files/${fileId}/`);
+      
+      // Обновляем список файлов
+      setFiles(prev => prev.filter(file => file.id !== fileId));
+      
+    } catch (err: any) {
+      console.error('Ошибка удаления файла:', err);
+      setError(err.message || 'Не удалось удалить файл');
+    }
+  };
+
+  const handleDownloadFile = async (file: DisplayFile) => {
+    try {
+      const response = await fetch(file.file_url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', file.original_name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      // Обновляем счетчик загрузок (если есть такой endpoint)
+      try {
+        await apiClient.post(`/api/v1/files/${file.id}/download/`);
+      } catch (err) {
+        console.log('Не удалось обновить счетчик загрузок:', err);
+      }
+      
+    } catch (err: any) {
+      console.error('Ошибка скачивания файла:', err);
+      setError(err.message || 'Не удалось скачать файл');
+    }
+  };
+
+  const getFileIcon = (category: string) => {
+    switch (category) {
+      case 'image':
+        return <DocumentIcon className="h-8 w-8 text-purple-600" />;
+      case 'document':
+        return <DocumentTextIcon className="h-8 w-8 text-blue-600" />;
+      case 'video':
+        return <VideoCameraIcon className="h-8 w-8 text-red-600" />;
+      case 'audio':
+        return <BellAlertIcon className="h-8 w-8 text-green-600" />;
+      case 'archive':
+        return <FolderIcon className="h-8 w-8 text-yellow-600" />;
+      default:
+        return <DocumentIcon className="h-8 w-8 text-gray-600" />;
+    }
+  };
+
   // Проверка, являюсь ли я участником
   const isParticipant = !!event?.current_user_participation;
   const isConfirmed = event?.current_user_participation?.is_confirmed;
   const isOwner = event?.owner.id === user?.id;
+
+  // Проверка прав на загрузку файлов
+  const canUploadFiles = (isParticipant && isConfirmed) || isOwner;
 
   // Форматирование
   const formatDate = (dateString: string | null) => {
@@ -625,6 +948,176 @@ export const EventDetails: React.FC = () => {
         </div>
       )}
 
+      {/* Модальное окно загрузки файла */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">
+                  Загрузка файла
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">{event.name}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadError('');
+                  setUploadSuccess(false);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="px-6 py-4">
+              {uploadSuccess ? (
+                <div className="text-center py-6">
+                  <CheckCircleIcon className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">
+                    Файл успешно загружен!
+                  </h4>
+                  <p className="text-gray-600">
+                    Ваш файл был загружен и будет доступен другим участникам.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Файл *
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <label className="w-full flex flex-col items-center px-4 py-6 bg-white text-blue rounded-lg border border-gray-300 cursor-pointer hover:bg-gray-50">
+                        <CloudArrowUpIcon className="h-8 w-8 text-gray-400 mb-2" />
+                        <span className="text-sm text-gray-600">
+                          {fileForm.file 
+                            ? fileForm.file.name 
+                            : 'Нажмите для выбора файла'}
+                        </span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={handleFileInputChange}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Название файла *
+                    </label>
+                    <input
+                      type="text"
+                      value={fileForm.name}
+                      onChange={(e) => handleFileFormChange('name', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Введите название файла"
+                    />
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Категория
+                    </label>
+                    <select
+                      value={fileForm.category}
+                      onChange={(e) => handleFileFormChange('category', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {fileCategories.map(category => (
+                        <option key={category.value} value={category.value}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Описание (опционально)
+                    </label>
+                    <textarea
+                      value={fileForm.description}
+                      onChange={(e) => handleFileFormChange('description', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Описание файла"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="mb-6">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="is_public"
+                        checked={fileForm.is_public}
+                        onChange={(e) => handleFileFormChange('is_public', e.target.checked)}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="is_public" className="ml-2 block text-sm text-gray-700">
+                        Сделать файл публичным (доступен всем участникам)
+                      </label>
+                    </div>
+                  </div>
+                  
+                  {uploadError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-800">{uploadError}</p>
+                    </div>
+                  )}
+                  
+                  <div className="text-sm text-gray-500 mb-4">
+                    <p>Максимальный размер файла: 100 MB</p>
+                    <p>Допустимые форматы: JPG, PNG, PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, ZIP, RAR, MP4, MP3, TXT</p>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div className="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
+              {!uploadSuccess && (
+                <>
+                  <button
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      setUploadError('');
+                      setFileForm({
+                        name: '',
+                        description: '',
+                        category: 'document',
+                        is_public: true,
+                        file: null
+                      });
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    disabled={uploadLoading}
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={handleSubmitFile}
+                    disabled={uploadLoading || !fileForm.file || !fileForm.name.trim()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploadLoading ? (
+                      <span className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Загрузка...
+                      </span>
+                    ) : (
+                      'Загрузить файл'
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Основной контент */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -705,18 +1198,28 @@ export const EventDetails: React.FC = () => {
                         <p className="text-gray-900 font-semibold">{event.participants_count}</p>
                       </div>
                     </div>
+                    
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">
+                        Файлов загружено
+                      </h3>
+                      <div className="flex items-center">
+                        <DocumentIcon className="h-5 w-5 text-gray-400 mr-2" />
+                        <p className="text-gray-900 font-semibold">{files.length}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Табы для сессий */}
+            {/* Табы для сессий и файлов */}
             <div className="mt-8">
               <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-8">
+                <nav className="-mb-px flex space-x-8 overflow-x-auto">
                   <button
                     onClick={() => setActiveTab('overview')}
-                    className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                    className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                       activeTab === 'overview'
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -728,7 +1231,7 @@ export const EventDetails: React.FC = () => {
                   {sortedOnlineSessions.length > 0 && (
                     <button
                       onClick={() => setActiveTab('online')}
-                      className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                      className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                         activeTab === 'online'
                           ? 'border-blue-500 text-blue-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -741,7 +1244,7 @@ export const EventDetails: React.FC = () => {
                   {sortedOfflineSessions.length > 0 && (
                     <button
                       onClick={() => setActiveTab('offline')}
-                      className={`py-3 px-1 border-b-2 font-medium text-sm ${
+                      className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                         activeTab === 'offline'
                           ? 'border-blue-500 text-blue-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -750,6 +1253,17 @@ export const EventDetails: React.FC = () => {
                       Офлайн-сессии ({sortedOfflineSessions.length})
                     </button>
                   )}
+                  
+                  <button
+                    onClick={() => setActiveTab('files')}
+                    className={`py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                      activeTab === 'files'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Файлы и проекты ({files.length})
+                  </button>
                 </nav>
               </div>
 
@@ -1071,6 +1585,123 @@ export const EventDetails: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {activeTab === 'files' && (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Файлы и проекты</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Файлы, загруженные участниками и организаторами
+                        </p>
+                      </div>
+                      
+                      {canUploadFiles && (
+                        <button
+                          onClick={handleUploadFile}
+                          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        >
+                          <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                          Загрузить файл
+                        </button>
+                      )}
+                    </div>
+                    
+                    {filesLoading ? (
+                      <div className="text-center py-12">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <p className="mt-4 text-gray-600">Загрузка файлов...</p>
+                      </div>
+                    ) : files.length > 0 ? (
+                      <div className="space-y-4">
+                        {files.map(file => {
+                          const isFileOwner = file.uploaded_by.id === user?.id;
+                          
+                          return (
+                            <div 
+                              key={file.id} 
+                              className="border border-gray-200 rounded-lg p-5 hover:bg-gray-50"
+                            >
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-start">
+                                  <div className="flex-shrink-0 mr-4">
+                                    {getFileIcon(file.category)}
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="font-medium text-gray-900 text-lg">{file.name}</h4>
+                                    {file.description && (
+                                      <p className="text-gray-600 mt-1">{file.description}</p>
+                                    )}
+                                    <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-500">
+                                      <span className="inline-flex items-center">
+                                        <UserIcon className="h-3 w-3 mr-1" />
+                                        {file.uploaded_by.full_name || file.uploaded_by.email}
+                                      </span>
+                                      <span>{formatRelativeDate(file.uploaded_at)}</span>
+                                      <span>{file.file_size_display}</span>
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${
+                                        file.is_public 
+                                          ? 'bg-green-100 text-green-800' 
+                                          : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                        {file.is_public ? 'Публичный' : 'Приватный'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center space-x-2">
+                                  {(isParticipant || isOwner || file.is_public) && (
+                                    <button
+                                      onClick={() => handleDownloadFile(file)}
+                                      className="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100"
+                                    >
+                                      <DocumentArrowDownIcon className="h-4 w-4 mr-1" />
+                                      Скачать
+                                    </button>
+                                  )}
+                                  
+                                  {(isFileOwner || isOwner) && (
+                                    <button
+                                      onClick={() => handleDeleteFile(file.id)}
+                                      className="inline-flex items-center px-3 py-1 bg-red-50 text-red-700 rounded-lg hover:bg-red-100"
+                                    >
+                                      <TrashIcon className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                          <FolderIcon className="h-6 w-6 text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                          Файлы отсутствуют
+                        </h3>
+                        <p className="text-gray-600 mb-4">
+                          {canUploadFiles
+                            ? 'Загрузите первый файл для этого события'
+                            : 'Пока никто не загрузил файлы для этого события'}
+                        </p>
+                        
+                        {canUploadFiles && (
+                          <button
+                            onClick={handleUploadFile}
+                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                            Загрузить первый файл
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1172,6 +1803,69 @@ export const EventDetails: React.FC = () => {
               )}
             </div>
 
+            {/* Быстрые действия */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Действия</h3>
+              <div className="space-y-3">
+                {canRegister && (
+                  <button
+                    onClick={handleRegistration}
+                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    <ArrowRightCircleIcon className="h-5 w-5 mr-2" />
+                    Принять участие
+                  </button>
+                )}
+                
+                {canUploadFiles && (
+                  <button
+                    onClick={handleUploadFile}
+                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                  >
+                    <CloudArrowUpIcon className="h-5 w-5 mr-2" />
+                    Загрузить проект
+                  </button>
+                )}
+                
+                {(event.has_online_sessions && sortedOnlineSessions.length > 0) && (
+                  <button
+                    onClick={() => setActiveTab('online')}
+                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium"
+                  >
+                    <VideoCameraIcon className="h-5 w-5 mr-2" />
+                    Онлайн-сессии
+                  </button>
+                )}
+                
+                {(event.has_offline_sessions && sortedOfflineSessions.length > 0) && (
+                  <button
+                    onClick={() => setActiveTab('offline')}
+                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 font-medium"
+                  >
+                    <MapPinIcon className="h-5 w-5 mr-2" />
+                    Офлайн-сессии
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => setActiveTab('files')}
+                  className="w-full inline-flex items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                >
+                  <DocumentIcon className="h-5 w-5 mr-2" />
+                  Файлы и проекты
+                </button>
+                
+                {isOwner && (
+                  <button
+                    onClick={() => navigate(`/admin/events/${event.id}`)}
+                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                  >
+                    Управление событием
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Организатор */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Организатор</h3>
@@ -1246,6 +1940,14 @@ export const EventDetails: React.FC = () => {
                   </div>
                 )}
                 
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <DocumentIcon className="h-5 w-5 text-blue-400 mr-3" />
+                    <span className="text-gray-600">Файлов</span>
+                  </div>
+                  <span className="font-bold text-gray-900">{files.length}</span>
+                </div>
+                
                 <div className="pt-4 border-t border-gray-200">
                   <div className="text-sm text-gray-500 mb-2">Статус события</div>
                   <div className="flex flex-wrap gap-2">
@@ -1261,51 +1963,6 @@ export const EventDetails: React.FC = () => {
                     </span>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Действия */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Действия</h3>
-              <div className="space-y-3">
-                {canRegister && (
-                  <button
-                    onClick={handleRegistration}
-                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                  >
-                    <ArrowRightCircleIcon className="h-5 w-5 mr-2" />
-                    Принять участие
-                  </button>
-                )}
-                
-                {(event.has_online_sessions && sortedOnlineSessions.length > 0) && (
-                  <button
-                    onClick={() => setActiveTab('online')}
-                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium"
-                  >
-                    <VideoCameraIcon className="h-5 w-5 mr-2" />
-                    Онлайн-сессии
-                  </button>
-                )}
-                
-                {(event.has_offline_sessions && sortedOfflineSessions.length > 0) && (
-                  <button
-                    onClick={() => setActiveTab('offline')}
-                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 font-medium"
-                  >
-                    <MapPinIcon className="h-5 w-5 mr-2" />
-                    Офлайн-сессии
-                  </button>
-                )}
-                
-                {isOwner && (
-                  <button
-                    onClick={() => navigate(`/admin/events/${event.id}`)}
-                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
-                  >
-                    Управление событием
-                  </button>
-                )}
               </div>
             </div>
           </div>

@@ -16,10 +16,32 @@ import {
   FireIcon,
   StarIcon,
   BuildingOfficeIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  PlayCircleIcon,
+  PauseCircleIcon,
+  ComputerDesktopIcon,
+  BuildingLibraryIcon,
+  ExclamationCircleIcon,
+  BellAlertIcon
 } from '@heroicons/react/24/outline';
 
 // Типы данных
+interface EventSession {
+  id: number;
+  session_name: string;
+  start_time: string;
+  end_time: string | null;
+  status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+  is_ongoing: boolean;
+  is_upcoming: boolean;
+  is_past: boolean;
+  platform?: string;
+  address?: string;
+  room?: string;
+}
+
 interface Event {
   id: number;
   name: string;
@@ -37,16 +59,50 @@ interface Event {
   image_url: string | null;
   is_active: boolean;
   is_open: boolean;
-  has_online_sessions: boolean;
-  has_offline_sessions: boolean;
+  is_private: boolean;
+  registration_ends_at: string | null;
+  results_published_at: string | null;
+  
+  // Статистика
   online_sessions_count: number;
   offline_sessions_count: number;
   participants_count: number;
-  is_private: boolean;
+  
+  // Сессии
+  upcoming_online_sessions?: EventSession[];
+  upcoming_offline_sessions?: EventSession[];
+  
+  // Статусы для отображения
+  registration_status?: {
+    status: string;
+    display: string;
+    is_active: boolean;
+    is_ended: boolean;
+  };
+  results_status?: {
+    status: string;
+    display: string;
+    is_published: boolean;
+  };
+  sessions_status?: {
+    is_ongoing: boolean;
+    has_scheduled: boolean;
+    display: string;
+    online_count: number;
+    offline_count: number;
+  };
+  current_stage?: {
+    name: string;
+    display: string;
+    status: 'active' | 'pending' | 'completed' | 'unknown';
+    detail?: string;
+  };
+  
   // Информация о текущем пользователе
   current_user_participation?: {
     id: number;
     role: string;
+    role_display: string;
     is_confirmed: boolean;
     registered_at: string;
   };
@@ -55,8 +111,10 @@ interface Event {
 interface DashboardStats {
   total_events: number;
   upcoming_events: number;
-  ongoing_events: number;
+  ongoing_sessions: number;
   total_participants: number;
+  total_sessions: number;
+  ongoing_events: number;
 }
 
 const StudentDashboard = () => {
@@ -71,12 +129,71 @@ const StudentDashboard = () => {
   // Данные
   const [events, setEvents] = useState<Event[]>([]);
   const [myEvents, setMyEvents] = useState<Event[]>([]);
+  const [participatingEvents, setParticipatingEvents] = useState<Event[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     total_events: 0,
     upcoming_events: 0,
-    ongoing_events: 0,
-    total_participants: 0
+    ongoing_sessions: 0,
+    total_participants: 0,
+    total_sessions: 0,
+    ongoing_events: 0
   });
+  
+  // Вспомогательные функции для определения статусов
+  const getEventCurrentStatus = (event: Event) => {
+    const now = new Date();
+    
+    // Проверяем, есть ли активные сессии прямо сейчас
+    const hasActiveSessionsNow = [
+      ...(event.upcoming_online_sessions || []),
+      ...(event.upcoming_offline_sessions || [])
+    ].some(session => session.is_ongoing);
+    
+    if (hasActiveSessionsNow) {
+      return 'ongoing_now';
+    }
+    
+    // ВАЖНОЕ ИСПРАВЛЕНИЕ: Если у события есть sessions_status.is_ongoing = true (из API), 
+    // значит конференция идет, даже если нет сессий прямо сейчас
+    if (event.sessions_status?.is_ongoing) {
+      return 'ongoing_event';
+    }
+    
+    // Проверяем, есть ли будущие сессии (которые еще не начались)
+    const hasUpcomingSessions = [
+      ...(event.upcoming_online_sessions || []),
+      ...(event.upcoming_offline_sessions || [])
+    ].some(session => session.is_upcoming);
+    
+    // Проверяем статус регистрации
+    const registrationClosed = event.registration_status?.is_ended || false;
+    
+    // Если регистрация закрыта, но есть будущие сессии - это идет сейчас (в рамках события)
+    if (registrationClosed && hasUpcomingSessions) {
+      return 'ongoing_event';
+    }
+    
+    // Проверяем, открыта ли регистрация
+    if (event.registration_status?.is_active) {
+      return 'registration_open';
+    }
+    
+    // Если регистрация закрыта и нет будущих сессий
+    if (registrationClosed && !hasUpcomingSessions) {
+      return 'registration_closed_no_sessions';
+    }
+    
+    // Если событие активно и опубликовано
+    if (event.status === 'published' && event.is_active) {
+      // Проверяем, идет ли сессия по current_stage
+      if (event.current_stage?.name === 'sessions' && event.current_stage?.status === 'active') {
+        return 'ongoing_event';
+      }
+      return 'published_no_info';
+    }
+    
+    return 'unknown';
+  };
   
   // Загрузка данных
   const loadDashboardData = async () => {
@@ -86,48 +203,69 @@ const StudentDashboard = () => {
     setError('');
     
     try {
-      // Загружаем события, где пользователь участвует
-      const participatingResponse = await apiClient.get<{ results: Event[] }>('/api/v1/events/events/participating/');
-      const participatingEvents = participatingResponse.results || [];
+      // Загружаем все данные параллельно
+      const [eventsData, participatingData, myEventsData] = await Promise.all([
+        apiClient.get<Event[]>('/api/v1/events/?status=published&expand=stats').catch(() => []),
+        apiClient.get<Event[]>('/api/v1/events/participating/?expand=stats').catch(() => []),
+        apiClient.get<Event[]>('/api/v1/events/my/?expand=stats').catch(() => [])
+      ]);
       
-      // Загружаем события пользователя (где он организатор)
-      const myEventsResponse = await apiClient.get<{ results: Event[] }>('/api/v1/events/events/my/');
-      const myEvents = myEventsResponse.results || [];
-      
-      // Загружаем предстоящие события
-      const upcomingResponse = await apiClient.get<{ results: Event[] }>('/api/v1/events/events/upcoming/');
-      const upcomingEvents = upcomingResponse.results || [];
+      const allEvents = Array.isArray(eventsData) ? eventsData : [];
+      const participatingEvents = Array.isArray(participatingData) ? participatingData : [];
+      const myEvents = Array.isArray(myEventsData) ? myEventsData : [];
       
       // Объединяем все события, убирая дубликаты
-      const allEvents = [...participatingEvents, ...upcomingEvents];
-      const uniqueEvents = allEvents.filter(
+      const combinedEvents = [...allEvents, ...participatingEvents, ...myEvents];
+      const uniqueEvents = combinedEvents.filter(
         (event, index, self) => index === self.findIndex(e => e.id === event.id)
       );
       
-      // Фильтруем события по статусу участия
-      const upcoming = uniqueEvents.filter(event => 
-        event.status === 'published' && 
-        event.is_active &&
-        event.is_open &&
-        (!event.closes_at || new Date(event.closes_at) > new Date())
-      );
-      
-      const ongoing = uniqueEvents.filter(event => 
-        event.status === 'published' && 
-        event.is_active &&
-        event.has_online_sessions
-      );
-      
       // Вычисляем статистику
-      const totalParticipants = participatingEvents.reduce((sum, event) => sum + event.participants_count, 0);
+      let ongoingSessionsCount = 0;
+      let ongoingEventsCount = 0;
+      let totalSessions = 0;
+      
+      uniqueEvents.forEach(event => {
+        // Все сессии события
+        const allSessions = [
+          ...(event.upcoming_online_sessions || []),
+          ...(event.upcoming_offline_sessions || [])
+        ];
+        
+        // Считаем сессии
+        totalSessions += allSessions.length;
+        
+        // Активные сессии прямо сейчас
+        const activeSessionsNow = allSessions.filter(session => session.is_ongoing);
+        ongoingSessionsCount += activeSessionsNow.length;
+        
+        // Считаем события, которые "идут сейчас" - ИСПРАВЛЕНО
+        const eventStatus = getEventCurrentStatus(event);
+        if (eventStatus === 'ongoing_now' || eventStatus === 'ongoing_event') {
+          ongoingEventsCount++;
+        }
+      });
+      
+      const totalParticipants = uniqueEvents.reduce((sum, event) => sum + event.participants_count, 0);
+      
+      // Считаем предстоящие события (где регистрация открыта или есть будущие сессии)
+      const upcomingEventsCount = uniqueEvents.filter(event => {
+        const eventStatus = getEventCurrentStatus(event);
+        return eventStatus === 'registration_open' || 
+               eventStatus === 'ongoing_event' ||
+               eventStatus === 'ongoing_now';
+      }).length;
       
       setEvents(uniqueEvents);
       setMyEvents(myEvents);
+      setParticipatingEvents(participatingEvents);
       setStats({
         total_events: uniqueEvents.length,
-        upcoming_events: upcoming.length,
-        ongoing_events: ongoing.length,
-        total_participants: totalParticipants
+        upcoming_events: upcomingEventsCount,
+        ongoing_sessions: ongoingSessionsCount,
+        total_participants: totalParticipants,
+        total_sessions: totalSessions,
+        ongoing_events: ongoingEventsCount
       });
       
     } catch (err: any) {
@@ -159,34 +297,102 @@ const StudentDashboard = () => {
   
   // Фильтрация событий по активной вкладке
   const getFilteredEvents = () => {
-    const now = new Date();
-    
     switch (activeTab) {
       case 'upcoming':
-        return events.filter(event => 
-          event.status === 'published' && 
-          event.is_active &&
-          event.is_open &&
-          (!event.closes_at || new Date(event.closes_at) > now)
-        ).sort((a, b) => {
-          const dateA = a.closes_at ? new Date(a.closes_at) : new Date(a.created_at);
-          const dateB = b.closes_at ? new Date(b.closes_at) : new Date(b.created_at);
-          return dateA.getTime() - dateB.getTime();
+        return events.filter(event => {
+          const eventStatus = getEventCurrentStatus(event);
+          // Показываем события, которые: имеют открытую регистрацию ИЛИ идут сейчас
+          return eventStatus === 'registration_open' || 
+                 eventStatus === 'ongoing_now' ||
+                 eventStatus === 'ongoing_event';
+        }).sort((a, b) => {
+          // Приоритет: активные сессии сейчас -> события, которые идут -> с открытой регистрацией
+          const priority = (event: Event) => {
+            const status = getEventCurrentStatus(event);
+            if (status === 'ongoing_now') return 0;
+            if (status === 'ongoing_event') return 1;
+            return 2;
+          };
+          
+          const aPriority = priority(a);
+          const bPriority = priority(b);
+          
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          
+          // Затем сортируем по дате ближайшей сессии
+          const getNextSessionDate = (event: Event) => {
+            const allSessions = [
+              ...(event.upcoming_online_sessions || []),
+              ...(event.upcoming_offline_sessions || [])
+            ].filter(s => s.is_upcoming || s.is_ongoing);
+            
+            return allSessions.length > 0 
+              ? new Date(allSessions[0].start_time).getTime()
+              : new Date(event.created_at).getTime();
+          };
+          
+          return getNextSessionDate(a) - getNextSessionDate(b);
         });
       
       case 'ongoing':
-        return events.filter(event => 
-          event.status === 'published' && 
-          event.is_active &&
-          event.has_online_sessions
-        ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return events.filter(event => {
+          const eventStatus = getEventCurrentStatus(event);
+          // Показываем только события, которые идут сейчас (включая конференции в процессе)
+          return eventStatus === 'ongoing_now' || eventStatus === 'ongoing_event';
+        }).sort((a, b) => {
+          // Приоритет: активные сессии сейчас -> конференции в процессе
+          const priority = (event: Event) => {
+            const status = getEventCurrentStatus(event);
+            if (status === 'ongoing_now') return 0;
+            if (status === 'ongoing_event') return 1;
+            return 2;
+          };
+          
+          const aPriority = priority(a);
+          const bPriority = priority(b);
+          
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          
+          // Затем сортируем по количеству активных сессий
+          const getOngoingCount = (event: Event) => 
+            [...(event.upcoming_online_sessions || []), ...(event.upcoming_offline_sessions || [])]
+              .filter(s => s.is_ongoing).length;
+          
+          return getOngoingCount(b) - getOngoingCount(a);
+        });
       
       case 'past':
-        return events.filter(event => 
-          event.status === 'completed' || 
-          !event.is_active ||
-          (event.closes_at && new Date(event.closes_at) < now)
-        ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return events.filter(event => {
+          // Завершенные события
+          if (event.status === 'completed') return true;
+          
+          // События, где все сессии завершены и регистрация закрыта
+          const now = new Date();
+          const allSessions = [
+            ...(event.upcoming_online_sessions || []),
+            ...(event.upcoming_offline_sessions || [])
+          ];
+          
+          if (allSessions.length === 0) {
+            // Если нет сессий, проверяем дату закрытия
+            if (event.closes_at) {
+              return new Date(event.closes_at) < now;
+            }
+            return false;
+          }
+          
+          // Все сессии завершены
+          const allSessionsPast = allSessions.every(session => {
+            const endTime = session.end_time ? new Date(session.end_time) : null;
+            return endTime && endTime < now;
+          });
+          
+          return allSessionsPast;
+        }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       case 'my':
         return myEvents.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -196,14 +402,17 @@ const StudentDashboard = () => {
     }
   };
   
-  // Форматирование
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Не указана';
+  // Форматирование дат и времени
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return 'Не указано';
     try {
-      return new Date(dateString).toLocaleDateString('ru-RU', {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return dateString;
@@ -213,26 +422,140 @@ const StudentDashboard = () => {
   const formatTime = (dateString: string | null) => {
     if (!dateString) return '';
     try {
-      return new Date(dateString).toLocaleTimeString('ru-RU', {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('ru-RU', {
         hour: '2-digit',
-        minute: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return '';
     }
   };
   
-  const getEventStatus = (event: Event) => {
-    if (event.current_user_participation) {
-      if (event.owner.id === user?.id) {
-        return { text: 'Организатор', color: 'bg-blue-100 text-blue-800' };
-      }
-      if (event.current_user_participation.is_confirmed) {
-        return { text: 'Участник', color: 'bg-green-100 text-green-800' };
-      }
-      return { text: 'Ожидает подтверждения', color: 'bg-yellow-100 text-yellow-800' };
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Не указано';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch {
+      return dateString;
     }
-    return { text: 'Доступно для регистрации', color: 'bg-gray-100 text-gray-800' };
+  };
+  
+  // Вспомогательные функции
+  const getEventStatus = (event: Event) => {
+    const eventCurrentStatus = getEventCurrentStatus(event);
+    
+    if (event.owner.id === user?.id) {
+      return { text: 'Организатор', color: 'bg-blue-100 text-blue-800', icon: StarIcon };
+    }
+    
+    // Определяем статус в зависимости от текущего состояния события
+    switch (eventCurrentStatus) {
+      case 'ongoing_now':
+        return { 
+          text: 'Сессия идет сейчас', 
+          color: 'bg-green-100 text-green-800', 
+          icon: PlayCircleIcon 
+        };
+      
+      case 'ongoing_event':
+        return { 
+          text: 'Конференция идет', 
+          color: 'bg-orange-100 text-orange-800', 
+          icon: BellAlertIcon 
+        };
+      
+      case 'registration_open':
+        if (event.current_user_participation) {
+          if (event.current_user_participation.is_confirmed) {
+            return { text: 'Участник', color: 'bg-green-100 text-green-800', icon: CheckCircleIcon };
+          }
+          return { text: 'Ожидает подтверждения', color: 'bg-yellow-100 text-yellow-800', icon: ClockIcon };
+        }
+        return { text: 'Регистрация открыта', color: 'bg-purple-100 text-purple-800', icon: PauseCircleIcon };
+      
+      case 'registration_closed_no_sessions':
+        return { text: 'Регистрация закрыта', color: 'bg-red-100 text-red-800', icon: XCircleIcon };
+      
+      default:
+        return { text: 'Доступ ограничен', color: 'bg-gray-100 text-gray-800', icon: ExclamationCircleIcon };
+    }
+  };
+  
+  const getSessionStatus = (session: EventSession) => {
+    if (session.is_ongoing) {
+      return { text: 'Идет сейчас', color: 'bg-green-100 text-green-800', icon: PlayCircleIcon };
+    } else if (session.is_upcoming) {
+      return { text: 'Запланирована', color: 'bg-blue-100 text-blue-800', icon: ClockIcon };
+    } else if (session.is_past) {
+      return { text: 'Завершена', color: 'bg-gray-100 text-gray-800', icon: CheckCircleIcon };
+    } else if (session.status === 'cancelled') {
+      return { text: 'Отменена', color: 'bg-red-100 text-red-800', icon: XCircleIcon };
+    }
+    return { text: session.status, color: 'bg-gray-100 text-gray-800', icon: ClockIcon };
+  };
+  
+  const getStageIcon = (stageName: string) => {
+    switch (stageName) {
+      case 'registration': return { icon: UserGroupIcon, color: 'text-purple-600', bg: 'bg-purple-100' };
+      case 'sessions': return { icon: VideoCameraIcon, color: 'text-blue-600', bg: 'bg-blue-100' };
+      case 'results': return { icon: TrophyIcon, color: 'text-yellow-600', bg: 'bg-yellow-100' };
+      case 'preparation': return { icon: BuildingLibraryIcon, color: 'text-green-600', bg: 'bg-green-100' };
+      case 'completed': return { icon: CheckCircleIcon, color: 'text-gray-600', bg: 'bg-gray-100' };
+      default: return { icon: CalendarDaysIcon, color: 'text-gray-600', bg: 'bg-gray-100' };
+    }
+  };
+  
+  const calculateTimeLeft = (endTime: string | null) => {
+    if (!endTime) return '';
+    const now = new Date();
+    const end = new Date(endTime);
+    const diff = end.getTime() - now.getTime();
+    
+    if (diff <= 0) return 'Завершено';
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (days > 0) return `${days} д ${hours} ч`;
+    if (hours > 0) return `${hours} ч ${minutes} мин`;
+    return `${minutes} мин`;
+  };
+  
+  // Получаем все текущие сессии для боковой панели
+  const getCurrentSessions = () => {
+    const allSessions: Array<{session: EventSession, event: Event}> = [];
+    
+    events.forEach(event => {
+      const allEventSessions = [
+        ...(event.upcoming_online_sessions || []),
+        ...(event.upcoming_offline_sessions || [])
+      ];
+      
+      allEventSessions.forEach(session => {
+        if (session.is_ongoing) {
+          allSessions.push({ session, event });
+        }
+      });
+    });
+    
+    return allSessions.sort((a, b) => 
+      new Date(b.session.start_time).getTime() - new Date(a.session.start_time).getTime()
+    );
+  };
+  
+  // Функция для получения количества будущих сессий
+  const getUpcomingSessionsCount = (event: Event) => {
+    return [
+      ...(event.upcoming_online_sessions || []),
+      ...(event.upcoming_offline_sessions || [])
+    ].filter(session => session.is_upcoming).length;
   };
   
   if (!isAuthenticated) {
@@ -264,6 +587,13 @@ const StudentDashboard = () => {
   }
   
   const filteredEvents = getFilteredEvents();
+  const currentSessions = getCurrentSessions();
+  
+  // Получаем события, которые идут (для боковой панели)
+  const ongoingEvents = events.filter(event => {
+    const eventStatus = getEventCurrentStatus(event);
+    return eventStatus === 'ongoing_now' || eventStatus === 'ongoing_event';
+  });
   
   return (
     <div className="p-6">
@@ -294,7 +624,7 @@ const StudentDashboard = () => {
       </div>
       
       {/* Статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center">
             <div className="p-3 bg-blue-50 rounded-lg mr-4">
@@ -313,8 +643,20 @@ const StudentDashboard = () => {
               <ClockIcon className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Предстоящих</p>
+              <p className="text-sm text-gray-500">Активные и предстоящие</p>
               <p className="text-2xl font-bold text-gray-900">{stats.upcoming_events}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center">
+            <div className="p-3 bg-orange-50 rounded-lg mr-4">
+              <FireIcon className="h-6 w-6 text-orange-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Идут сейчас</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.ongoing_events}</p>
             </div>
           </div>
         </div>
@@ -325,8 +667,8 @@ const StudentDashboard = () => {
               <VideoCameraIcon className="h-6 w-6 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Идет сейчас</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.ongoing_events}</p>
+              <p className="text-sm text-gray-500">Активных сессий</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.ongoing_sessions}</p>
             </div>
           </div>
         </div>
@@ -377,7 +719,7 @@ const StudentDashboard = () => {
                 >
                   <div className="flex items-center">
                     <CalendarDaysIcon className="h-4 w-4 mr-2" />
-                    Предстоящие
+                    Предстоящие и текущие
                     <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
                       {stats.upcoming_events}
                     </span>
@@ -395,7 +737,7 @@ const StudentDashboard = () => {
                   <div className="flex items-center">
                     <FireIcon className="h-4 w-4 mr-2" />
                     Идут сейчас
-                    <span className="ml-2 text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full">
+                    <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full">
                       {stats.ongoing_events}
                     </span>
                   </div>
@@ -437,133 +779,299 @@ const StudentDashboard = () => {
             {/* Список конференций */}
             <div className="p-6">
               {filteredEvents.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {filteredEvents.map((event) => {
                     const statusInfo = getEventStatus(event);
+                    const StatusIcon = statusInfo.icon;
                     const isOwner = event.owner.id === user?.id;
-                    const isParticipant = !!event.current_user_participation;
+                    const stageInfo = event.current_stage;
+                    const StageIcon = stageInfo ? getStageIcon(stageInfo.name).icon : CalendarDaysIcon;
+                    const eventCurrentStatus = getEventCurrentStatus(event);
+                    
+                    // Все сессии события
+                    const allSessions = [
+                      ...(event.upcoming_online_sessions || []).map(s => ({ ...s, type: 'online' as const })),
+                      ...(event.upcoming_offline_sessions || []).map(s => ({ ...s, type: 'offline' as const }))
+                    ];
+                    
+                    // Сортируем сессии по времени
+                    const sortedSessions = allSessions.sort((a, b) => 
+                      new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+                    );
+                    
+                    // Будущие сессии
+                    const upcomingSessions = sortedSessions.filter(s => s.is_upcoming);
+                    // Активные сессии сейчас
+                    const activeSessionsNow = sortedSessions.filter(s => s.is_ongoing);
                     
                     return (
                       <div
                         key={event.id}
-                        onClick={() => handleNavigateToEvent(event.id)}
-                        className="border border-gray-200 rounded-lg p-5 hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer group"
+                        className={`border rounded-xl p-5 transition-all ${
+                          eventCurrentStatus === 'ongoing_now' 
+                            ? 'border-green-300 bg-green-50' 
+                            : eventCurrentStatus === 'ongoing_event'
+                            ? 'border-orange-300 bg-orange-50'
+                            : 'border-gray-200 bg-white'
+                        } hover:shadow-sm`}
                       >
-                        <div className="flex justify-between items-start mb-3">
+                        {/* Заголовок и статусы */}
+                        <div className="flex justify-between items-start mb-4">
                           <div className="flex-1">
-                            <div className="flex items-start">
-                              <div>
-                                <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-600">
-                                  {event.name}
-                                </h3>
-                                {event.description && (
-                                  <p className="text-gray-600 mt-1 text-sm line-clamp-2">
-                                    {event.description}
-                                  </p>
-                                )}
-                              </div>
+                            <div className="flex items-start gap-2 mb-2">
+                              <h3 className="font-bold text-lg text-gray-900">
+                                {event.name}
+                              </h3>
+                              
+                              {/* Бейдж "Идет сейчас" для событий с активными сессиями */}
+                              {eventCurrentStatus === 'ongoing_now' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                  <PlayCircleIcon className="h-3 w-3 mr-1" />
+                                  Идет сессия
+                                </span>
+                              )}
+                              
+                              {/* Бейдж "Конференция идет" для событий в процессе */}
+                              {eventCurrentStatus === 'ongoing_event' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                  <BellAlertIcon className="h-3 w-3 mr-1" />
+                                  Конференция идет
+                                </span>
+                              )}
                               
                               {event.is_private && (
-                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                  Приватная
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                  🔒 Приватная
                                 </span>
                               )}
                             </div>
                             
-                            <div className="flex items-center mt-3 space-x-4">
-                              {/* Организатор */}
-                              <div className="flex items-center text-sm text-gray-600">
-                                <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center mr-2">
+                            {event.description && (
+                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                                {event.description}
+                              </p>
+                            )}
+                            
+                            {/* Основные метрики */}
+                            <div className="flex flex-wrap gap-3 mb-3">
+                              {/* Статус участия */}
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
+                                <StatusIcon className="h-3 w-3 mr-1" />
+                                {statusInfo.text}
+                              </span>
+                              
+                              {/* Текущий этап */}
+                              {stageInfo && (
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800`}>
+                                  <StageIcon className="h-3 w-3 mr-1" />
+                                  {stageInfo.display}
+                                  {stageInfo.detail && ` (${stageInfo.detail})`}
+                                </span>
+                              )}
+                              
+                              {/* Регистрация */}
+                              {event.registration_status && (
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                                  event.registration_status.is_active 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : event.registration_status.is_ended
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {event.registration_status.is_ended 
+                                    ? 'Регистрация закрыта' 
+                                    : event.registration_status.display}
+                                </span>
+                              )}
+                              
+                              {/* Активные сессии сейчас */}
+                              {activeSessionsNow.length > 0 && (
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  <PlayCircleIcon className="h-3 w-3 mr-1" />
+                                  {activeSessionsNow.length} активных сессий
+                                </span>
+                              )}
+                              
+                              {/* Будущие сессии */}
+                              {upcomingSessions.length > 0 && eventCurrentStatus === 'ongoing_event' && (
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  <VideoCameraIcon className="h-3 w-3 mr-1" />
+                                  {upcomingSessions.length} будущих сессий
+                                </span>
+                              )}
+                            </div>
+                            
+                            {/* Организатор и даты */}
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-4">
+                              <div className="flex items-center">
+                                <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center mr-2">
                                   <UserIcon className="h-3 w-3 text-blue-600" />
                                 </div>
                                 <span>{event.owner.full_name || event.owner.email}</span>
                               </div>
                               
-                              {/* Дата */}
-                              {event.closes_at && (
-                                <div className="flex items-center text-sm text-gray-600">
+                              {event.registration_ends_at && (
+                                <div className="flex items-center">
                                   <CalendarDaysIcon className="h-4 w-4 mr-1 text-gray-400" />
-                                  <span>До {formatDate(event.closes_at)}</span>
+                                  <span>
+                                    Рег. до: {formatDateTime(event.registration_ends_at)}
+                                  </span>
                                 </div>
                               )}
                               
-                              {/* Участники */}
-                              <div className="flex items-center text-sm text-gray-600">
+                              {event.results_published_at && (
+                                <div className="flex items-center">
+                                  <TrophyIcon className="h-4 w-4 mr-1 text-gray-400" />
+                                  <span>
+                                    Итоги: {formatDateTime(event.results_published_at)}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center">
                                 <UserGroupIcon className="h-4 w-4 mr-1 text-gray-400" />
-                                <span>{event.participants_count}</span>
+                                <span>{event.participants_count} участников</span>
                               </div>
                               
-                              {/* Сессии */}
-                              <div className="flex items-center space-x-2">
-                                {event.has_online_sessions && (
-                                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-                                    <VideoCameraIcon className="h-3 w-3 mr-1" />
-                                    Онлайн
-                                  </span>
-                                )}
-                                {event.has_offline_sessions && (
-                                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-                                    <MapPinIcon className="h-3 w-3 mr-1" />
-                                    Офлайн
-                                  </span>
-                                )}
-                              </div>
+                              {/* Показываем статус сессий, если есть */}
+                              {event.sessions_status && (
+                                <div className="flex items-center">
+                                  <VideoCameraIcon className="h-4 w-4 mr-1 text-gray-400" />
+                                  <span>{event.sessions_status.display}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           
-                          <div className="flex flex-col items-end space-y-2 ml-4">
-                            {/* Статус участия */}
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}>
-                              {statusInfo.text}
-                            </span>
-                            
-                            {/* Кнопка перехода */}
+                          <div className="flex flex-col items-end ml-4">
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleNavigateToEvent(event.id);
-                              }}
-                              className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              onClick={() => handleNavigateToEvent(event.id)}
+                              className="inline-flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-2 rounded-lg hover:bg-blue-50"
                             >
-                              Перейти
+                              Подробнее
                               <ArrowRightIcon className="h-4 w-4 ml-1" />
                             </button>
-                          </div>
-                        </div>
-                        
-                        {/* Дополнительная информация для текущих событий */}
-                        {activeTab === 'ongoing' && event.has_online_sessions && (
-                          <div className="mt-4 pt-4 border-t border-gray-100">
-                            <div className="flex items-center text-sm text-gray-700">
-                              <FireIcon className="h-4 w-4 text-orange-500 mr-2" />
-                              <span>Сейчас проходят онлайн-сессии</span>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Быстрый доступ для организатора */}
-                        {isOwner && (
-                          <div className="mt-4 pt-4 border-t border-gray-100">
-                            <div className="flex space-x-3">
+                            
+                            {isOwner && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   navigate(`/admin/events/${event.id}`);
                                 }}
-                                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                className="mt-2 text-xs text-purple-600 hover:text-purple-800"
                               >
-                                Управление конференцией
+                                Управление
                               </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/conference/${event.id}`);
-                                }}
-                                className="text-sm text-purple-600 hover:text-purple-800 font-medium"
-                              >
-                                Перейти в конференцию
-                              </button>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Сессии события */}
+                        {sortedSessions.length > 0 && (
+                          <div className="border-t border-gray-200 pt-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-medium text-gray-900">
+                                Сессии ({event.online_sessions_count + event.offline_sessions_count})
+                              </h4>
+                              <div className="flex items-center space-x-2">
+                                {event.online_sessions_count > 0 && (
+                                  <span className="inline-flex items-center text-xs text-purple-700">
+                                    <ComputerDesktopIcon className="h-3 w-3 mr-1" />
+                                    Онлайн: {event.online_sessions_count}
+                                  </span>
+                                )}
+                                {event.offline_sessions_count > 0 && (
+                                  <span className="inline-flex items-center text-xs text-yellow-700">
+                                    <MapPinIcon className="h-3 w-3 mr-1" />
+                                    Офлайн: {event.offline_sessions_count}
+                                  </span>
+                                )}
+                              </div>
                             </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {sortedSessions.slice(0, 4).map((session) => {
+                                const sessionStatus = getSessionStatus(session);
+                                const SessionStatusIcon = sessionStatus.icon;
+                                
+                                return (
+                                  <div 
+                                    key={session.id}
+                                    className={`border rounded-lg p-3 ${
+                                      session.is_ongoing 
+                                        ? 'border-green-200 bg-green-50' 
+                                        : session.is_upcoming
+                                        ? 'border-blue-200 bg-blue-50'
+                                        : 'border-gray-200'
+                                    }`}
+                                  >
+                                    <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                        <div className="flex items-center mb-1">
+                                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sessionStatus.color}`}>
+                                            <SessionStatusIcon className="h-3 w-3 mr-1" />
+                                            {sessionStatus.text}
+                                          </span>
+                                          <span className="ml-2 text-xs px-2 py-0.5 rounded ${
+                                            session.type === 'online' 
+                                              ? 'bg-purple-100 text-purple-800' 
+                                              : 'bg-yellow-100 text-yellow-800'
+                                          }">
+                                            {session.type === 'online' ? 'Онлайн' : 'Офлайн'}
+                                          </span>
+                                        </div>
+                                        <h5 className="font-medium text-sm text-gray-900">
+                                          {session.session_name}
+                                        </h5>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="text-xs text-gray-600 space-y-1">
+                                      <div className="flex items-center">
+                                        <ClockIcon className="h-3 w-3 mr-1" />
+                                        <span>Начало: {formatDateTime(session.start_time)}</span>
+                                      </div>
+                                      {session.end_time && (
+                                        <div className="flex items-center">
+                                          <ClockIcon className="h-3 w-3 mr-1" />
+                                          <span>
+                                            Конец: {formatDateTime(session.end_time)}
+                                            {session.is_ongoing && (
+                                              <span className="ml-2 text-orange-600 font-medium">
+                                                ({calculateTimeLeft(session.end_time)})
+                                              </span>
+                                            )}
+                                          </span>
+                                        </div>
+                                      )}
+                                      {session.platform && (
+                                        <div className="flex items-center">
+                                          <ComputerDesktopIcon className="h-3 w-3 mr-1" />
+                                          <span>{session.platform}</span>
+                                        </div>
+                                      )}
+                                      {session.address && (
+                                        <div className="flex items-center">
+                                          <MapPinIcon className="h-3 w-3 mr-1" />
+                                          <span className="truncate">{session.address}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            
+                            {sortedSessions.length > 4 && (
+                              <div className="mt-3 text-center">
+                                <button
+                                  onClick={() => handleNavigateToEvent(event.id)}
+                                  className="text-sm text-blue-600 hover:text-blue-800"
+                                >
+                                  Показать все {sortedSessions.length} сессий →
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -590,8 +1098,8 @@ const StudentDashboard = () => {
                     {activeTab === 'past' && 'Нет прошедших конференций'}
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    {activeTab === 'upcoming' && 'Конференции, в которых вы участвуете или можете участвовать, появятся здесь'}
-                    {activeTab === 'ongoing' && 'Конференции с активными онлайн-сессиями появятся здесь'}
+                    {activeTab === 'upcoming' && 'Конференции, которые идут сейчас или скоро начнутся, появятся здесь'}
+                    {activeTab === 'ongoing' && 'Конференции с активными сессиями или будущими сессиями появятся здесь'}
                     {activeTab === 'my' && 'Создайте свою первую конференцию или станьте участником'}
                     {activeTab === 'past' && 'Прошедшие конференции появятся здесь'}
                   </p>
@@ -622,7 +1130,160 @@ const StudentDashboard = () => {
         {/* Боковая панель */}
         <div className="space-y-6">
           {/* Информация о пользователе */}
-         
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Мой профиль</h3>
+            <div className="flex items-center">
+              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mr-4">
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.full_name || user.email}
+                    className="h-12 w-12 rounded-full"
+                  />
+                ) : (
+                  <UserIcon className="h-6 w-6 text-blue-600" />
+                )}
+              </div>
+              <div>
+                <div className="font-medium text-gray-900">
+                  {user?.full_name || user?.email}
+                </div>
+                <div className="text-sm text-gray-500 mt-1">
+                  Участник: {participatingEvents.length} конференций
+                </div>
+                <div className="text-sm text-gray-500">
+                  Создано: {myEvents.length} конференций
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Активные сессии */}
+          {currentSessions.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Активные сессии</h3>
+                <span className="text-xs font-medium bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                  {currentSessions.length}
+                </span>
+              </div>
+              <div className="space-y-4">
+                {currentSessions.map(({ session, event }) => (
+                  <div
+                    key={session.id}
+                    onClick={() => handleNavigateToEvent(event.id)}
+                    className="border border-green-200 rounded-lg p-4 bg-green-50 hover:border-green-300 cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <div className="flex items-center mb-1">
+                          <PlayCircleIcon className="h-4 w-4 text-green-600 mr-1" />
+                          <span className="text-sm font-medium text-green-800">Идет сейчас</span>
+                        </div>
+                        <h4 className="font-medium text-gray-900 truncate">{session.session_name}</h4>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        session.type === 'online' 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {session.type === 'online' ? 'Онлайн' : 'Офлайн'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 mb-2 truncate">{event.name}</p>
+                    <div className="text-xs text-gray-700">
+                      <div className="flex items-center">
+                        <ClockIcon className="h-3 w-3 mr-1" />
+                        <span>До: {session.end_time ? formatDateTime(session.end_time) : 'Не указано'}</span>
+                        {session.end_time && (
+                          <span className="ml-2 text-orange-600 font-medium">
+                            ({calculateTimeLeft(session.end_time)})
+                          </span>
+                        )}
+                      </div>
+                      {session.platform && (
+                        <div className="flex items-center mt-1">
+                          <ComputerDesktopIcon className="h-3 w-3 mr-1" />
+                          <span className="truncate">{session.platform}</span>
+                        </div>
+                      )}
+                      {session.address && (
+                        <div className="flex items-center mt-1">
+                          <MapPinIcon className="h-3 w-3 mr-1" />
+                          <span className="truncate">{session.address}</span>
+                        </div>
+                      )}
+                    </div>
+                    <button className="mt-3 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                      Присоединиться →
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Конференции, которые идут */}
+          {ongoingEvents.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Конференции в процессе</h3>
+                <span className="text-xs font-medium bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                  {ongoingEvents.length}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {ongoingEvents
+                  .slice(0, 3)
+                  .map(event => {
+                    const eventCurrentStatus = getEventCurrentStatus(event);
+                    const activeSessions = [
+                      ...(event.upcoming_online_sessions || []),
+                      ...(event.upcoming_offline_sessions || [])
+                    ].filter(s => s.is_ongoing);
+                    
+                    const upcomingSessions = [
+                      ...(event.upcoming_online_sessions || []),
+                      ...(event.upcoming_offline_sessions || [])
+                    ].filter(s => s.is_upcoming);
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        onClick={() => handleNavigateToEvent(event.id)}
+                        className={`p-3 border rounded-lg cursor-pointer ${
+                          eventCurrentStatus === 'ongoing_now'
+                            ? 'border-green-200 bg-green-50 hover:border-green-300'
+                            : 'border-orange-200 bg-orange-50 hover:border-orange-300'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <div className={`h-8 w-8 rounded-full flex items-center justify-center mr-3 ${
+                            eventCurrentStatus === 'ongoing_now'
+                              ? 'bg-green-100'
+                              : 'bg-orange-100'
+                          }`}>
+                            {eventCurrentStatus === 'ongoing_now' ? (
+                              <PlayCircleIcon className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <BellAlertIcon className="h-4 w-4 text-orange-600" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900 truncate">{event.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {activeSessions.length > 0 && `${activeSessions.length} активных сессий`}
+                              {activeSessions.length === 0 && upcomingSessions.length > 0 && `${upcomingSessions.length} запланировано`}
+                              {activeSessions.length === 0 && upcomingSessions.length === 0 && 'Идет конференция'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
           
           {/* Быстрые действия */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -666,39 +1327,21 @@ const StudentDashboard = () => {
                 </div>
                 <ArrowRightIcon className="h-4 w-4" />
               </Link>
+              
+              <Link
+                to={`/user/sessions`}
+                className="w-full flex items-center justify-between p-3 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100"
+              >
+                <div className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center mr-3">
+                    <VideoCameraIcon className="h-4 w-4 text-orange-600" />
+                  </div>
+                  <span className="font-medium">Мои сессии</span>
+                </div>
+                <ArrowRightIcon className="h-4 w-4" />
+              </Link>
             </div>
           </div>
-          
-          {/* Активные сессии */}
-          {stats.ongoing_events > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Активные сейчас</h3>
-              <div className="space-y-3">
-                {events
-                  .filter(event => event.status === 'published' && event.has_online_sessions)
-                  .slice(0, 3)
-                  .map(event => (
-                    <div
-                      key={event.id}
-                      onClick={() => handleNavigateToEvent(event.id)}
-                      className="p-3 border border-gray-200 rounded-lg hover:border-purple-300 cursor-pointer"
-                    >
-                      <div className="flex items-center">
-                        <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
-                          <VideoCameraIcon className="h-4 w-4 text-purple-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 truncate">{event.name}</div>
-                          <div className="text-xs text-gray-500">
-                            {event.online_sessions_count} онлайн-сессий
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
