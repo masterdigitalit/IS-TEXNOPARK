@@ -170,10 +170,10 @@ cython_debug/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # Abstra
 # Abstra is an AI-powered process automation framework.
@@ -186,7 +186,7 @@ cython_debug/
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+.vscode/
 
 # Ruff stuff:
 .ruff_cache/
@@ -205,3 +205,206 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ============================================
+# ДОПОЛНЕНИЯ ДЛЯ DJANGO ПРОЕКТА С MinIO и Docker
+# ============================================
+
+# Django media and static files
+/media/
+/static/
+/staticfiles/
+
+# MinIO локальные данные
+/minio-data/
+/minio_data/
+~/minio-data/
+
+# Docker
+docker-compose.override.yml
+docker-compose.prod.yml
+*.dockerfile
+Dockerfile.prod
+
+# Docker volumes (локальные данные)
+volumes/
+data/
+
+# Docker контейнеры (идентификаторы)
+*.container
+*.cid
+
+# Логи
+*.log
+logs/
+
+# Сессии и кэш Django
+*.session
+*.cache
+
+# Миграции (опционально - можно коммитить, но иногда нужно игнорировать)
+# /migrations/*.py
+# !/migrations/__init__.py
+
+# Файлы загрузок (тестовые)
+test_uploads/
+test_files/
+
+# Файлы окружения (кроме примеров)
+.env.local
+.env.production
+.env.staging
+.env.development
+.env.test
+
+# Примеры файлов окружения (можно коммитить)
+.env.example
+.env.sample
+
+# Резервные копии
+*.bak
+*.backup
+*.old
+*.orig
+*.tmp
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE/Редакторы
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# Операционные системы
+ehthumbs.db
+[Tt]humbs.db
+
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+*.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+
+# Пакеты Python
+*.pyc
+*.pyo
+*.pyd
+
+# Тестовые файлы
+test_*.py
+*_test.py
+fixtures/
+
+# Конфигурационные файлы (опционально)
+config/local.py
+config/development.py
+
+# Файлы базы данных (кроме SQLite - его можно коммитить в разработке)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.mdb
+
+# Файлы профилирования
+profile.*.prof
+*.prof
+
+# Файлы дампов
+*.dump
+*.sql
+
+# Файлы для отладки
+debug.log
+debug_output/
+
+# Документация (сгенерированная)
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# Файлы сборки
+build/
+dist/
+*.egg-info/
+
+# Файлы для IDE
+.project
+.pydevproject
+.settings/
+.metadata/
+.recommenders/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Файлы сессий
+*.session
+*.pickle
+
+# Временные файлы
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Файлы кэша
+.cache/
+__pycache__/
+
+# Файлы для MinIO (если используется локально)
+minio/
+mc/
+
+# Файлы для разработки
+.devcontainer/
+docker-compose.dev.yml
+
+# Файлы для тестирования MinIO
+test-minio/
+test-buckets/
+
+# Файлы для Swagger/Redoc
+swagger.yaml
+redoc.html
+
+# Файлы для миграций БД (если не хотите коммитить)
+*.sql
+migrations/*.sql
+
+# Файлы для панели администратора Django
+admin_*.py
+
+# Файлы для менеджера пакетов
+Pipfile
+requirements/*.txt
+!requirements/base.txt
+!requirements/dev.txt
+!requirements/prod.txt
+
+/media/
+/static/
+/staticfiles/
+
+# Папка uploads (добавлено)
+/uploads/
+
+# MinIO локальные данные
+/minio-data/
+/minio_data/
+~/minio-data/

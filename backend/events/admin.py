@@ -1,11 +1,11 @@
+# events/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils import timezone
-from django.db import models
-from django.db.models import Count
+from django.db.models import Count, Q
 from .models import (
     Event, EventParticipant, OnlineEventInfo, OfflineSessionsInfo,
-    SessionAttendance, SessionMaterial
+    SessionAttendance, SessionMaterial, EventFile
 )
 
 
@@ -72,6 +72,19 @@ class SessionMaterialInline(admin.TabularInline):
     classes = ['collapse']
 
 
+class EventFileInline(admin.TabularInline):
+    """Inline для файлов событий"""
+    model = EventFile
+    extra = 0
+    fields = ['storage_file', 'category', 'description', 'is_public', 'display_order']
+    readonly_fields = ['uploaded_at']
+    show_change_link = True
+    classes = ['collapse']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('storage_file', 'uploaded_by')
+
+
 # Фильтры для админки
 class IsOpenFilter(admin.SimpleListFilter):
     """Фильтр для событий (открыто/закрыто)"""
@@ -88,11 +101,17 @@ class IsOpenFilter(admin.SimpleListFilter):
         now = timezone.now()
         if self.value() == 'open':
             return queryset.filter(
-                models.Q(closes_at__isnull=True) | 
-                models.Q(closes_at__gt=now)
+                Q(registration_ends_at__isnull=True) | 
+                Q(registration_ends_at__gt=now),
+                status='published',
+                is_active=True
             )
         if self.value() == 'closed':
-            return queryset.filter(closes_at__lte=now)
+            return queryset.filter(
+                Q(registration_ends_at__lte=now) |
+                Q(status='completed') |
+                Q(status='cancelled')
+            )
         return queryset
 
 
@@ -112,6 +131,121 @@ class IsPrivateFilter(admin.SimpleListFilter):
             return queryset.filter(is_private=True)
         if self.value() == 'public':
             return queryset.filter(is_private=False)
+        return queryset
+
+
+class RegistrationStatusFilter(admin.SimpleListFilter):
+    """Фильтр по статусу регистрации"""
+    title = 'Статус регистрации'
+    parameter_name = 'registration_status'
+    
+    def lookups(self, request, model_admin):
+        return (
+            ('in_progress', 'Идет регистрация'),
+            ('ended', 'Регистрация закрыта'),
+            ('not_started', 'Не началась'),
+        )
+    
+    def queryset(self, request, queryset):
+        now = timezone.now()
+        if self.value() == 'in_progress':
+            return queryset.filter(
+                registration_ends_at__gt=now,
+                status='published',
+                is_active=True
+            )
+        elif self.value() == 'ended':
+            return queryset.filter(
+                registration_ends_at__lte=now,
+                status='published'
+            )
+        elif self.value() == 'not_started':
+            return queryset.filter(
+                registration_ends_at__isnull=True,
+                status='published'
+            )
+        return queryset
+
+
+class ResultsStatusFilter(admin.SimpleListFilter):
+    """Фильтр по статусу результатов"""
+    title = 'Статус результатов'
+    parameter_name = 'results_status'
+    
+    def lookups(self, request, model_admin):
+        return (
+            ('published', 'Опубликованы'),
+            ('in_preparation', 'В подготовке'),
+            ('not_ready', 'Не готовы'),
+        )
+    
+    def queryset(self, request, queryset):
+        now = timezone.now()
+        if self.value() == 'published':
+            return queryset.filter(
+                results_published_at__lte=now,
+                results_published_at__isnull=False
+            )
+        elif self.value() == 'in_preparation':
+            return queryset.filter(
+                results_published_at__gt=now,
+                results_published_at__isnull=False
+            )
+        elif self.value() == 'not_ready':
+            return queryset.filter(
+                results_published_at__isnull=True
+            )
+        return queryset
+
+
+class StageFilter(admin.SimpleListFilter):
+    """Фильтр по текущему этапу события"""
+    title = 'Текущий этап'
+    parameter_name = 'current_stage'
+    
+    def lookups(self, request, model_admin):
+        return (
+            ('registration', 'Регистрация'),
+            ('sessions', 'Сессии'),
+            ('results', 'Результаты'),
+            ('preparation', 'Подготовка'),
+            ('completed', 'Завершено'),
+        )
+    
+    def queryset(self, request, queryset):
+        now = timezone.now()
+        if self.value() == 'registration':
+            return queryset.filter(
+                registration_ends_at__gt=now,
+                status='published',
+                is_active=True
+            )
+        elif self.value() == 'sessions':
+            return queryset.filter(
+                Q(online_sessions_status='ongoing') |
+                Q(offline_sessions_status='ongoing'),
+                status='published',
+                is_active=True
+            ).distinct()
+        elif self.value() == 'results':
+            return queryset.filter(
+                results_published_at__isnull=False,
+                status='published',
+                is_active=True
+            )
+        elif self.value() == 'preparation':
+            return queryset.filter(
+                registration_ends_at__lte=now,
+                online_sessions__isnull=True,
+                offline_sessions__isnull=True,
+                status='published',
+                is_active=True
+            )
+        elif self.value() == 'completed':
+            return queryset.filter(
+                status='completed',
+                is_active=False
+            )
         return queryset
 
 
@@ -164,19 +298,35 @@ class SessionTypeFilter(admin.SimpleListFilter):
         return queryset
 
 
+class EventFileCategoryFilter(admin.SimpleListFilter):
+    """Фильтр по категории файлов событий"""
+    title = 'Категория файла'
+    parameter_name = 'category'
+    
+    def lookups(self, request, model_admin):
+        return EventFile.FILE_CATEGORIES
+    
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(category=self.value())
+        return queryset
+
+
 # Основные админ-классы
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     """Админ-класс для событий"""
     list_display = [
         'name', 'owner_safe_link', 'status_display', 'is_private_display',
-        'is_open_display', 'participant_count', 'online_sessions_count', 
-        'offline_sessions_count', 'total_sessions_count', 'created_at_display', 
-        'is_active_display'
+        'registration_status_display', 'results_status_display',
+        'current_stage_display', 'progress_bar',
+        'participant_count', 'online_sessions_count', 'offline_sessions_count',
+        'files_count', 'created_at_display'
     ]
     
     list_filter = [
-        'status', 'is_active', IsPrivateFilter, IsOpenFilter, SessionTypeFilter,
+        'status', 'is_active', IsPrivateFilter, RegistrationStatusFilter, 
+        ResultsStatusFilter, StageFilter, SessionTypeFilter,
         'created_at', 'owner'
     ]
     
@@ -189,85 +339,144 @@ class EventAdmin(admin.ModelAdmin):
     
     date_hierarchy = 'created_at'
     
-    # Методы для readonly_fields (detail view) - русские отображения
-    @admin.display(description='Открыто')
+    # Методы для readonly_fields (detail view)
+    @admin.display(description='Открыто для регистрации')
     def is_open_readonly(self, obj):
         if obj.is_open:
             return format_html('<span style="color: green;">✓ Да</span>')
         return format_html('<span style="color: red;">✗ Нет</span>')
     
-    @admin.display(description='Приватное')
-    def is_private_readonly(self, obj):
-        if obj.is_private:
-            return format_html('<span style="color: purple;">✓ Да</span>')
-        return format_html('<span style="color: green;">✗ Нет</span>')
+    @admin.display(description='Дата окончания регистрации')
+    def registration_ends_at_readonly(self, obj):
+        if obj.registration_ends_at:
+            return obj.registration_ends_at.strftime('%d.%m.%Y %H:%M')
+        return format_html('<span style="color: gray;">—</span>')
     
-    @admin.display(description='Есть онлайн сессии')
-    def has_online_sessions_readonly(self, obj):
-        if obj.has_online_sessions:
-            return format_html('<span style="color: green;">✓ Да</span>')
-        return format_html('<span style="color: red;">✗ Нет</span>')
+    @admin.display(description='Дата подведения итогов')
+    def results_published_at_readonly(self, obj):
+        if obj.results_published_at:
+            return obj.results_published_at.strftime('%d.%m.%Y %H:%M')
+        return format_html('<span style="color: gray;">—</span>')
     
-    @admin.display(description='Есть офлайн сессии')
-    def has_offline_sessions_readonly(self, obj):
-        if obj.offline_sessions.exists():
-            return format_html('<span style="color: green;">✓ Да</span>')
-        return format_html('<span style="color: red;">✗ Нет</span>')
+    @admin.display(description='Дата окончания')
+    def closes_at_readonly(self, obj):
+        if obj.closes_at:
+            return obj.closes_at.strftime('%d.%m.%Y %H:%M')
+        return format_html('<span style="color: gray;">—</span>')
     
-    @admin.display(description='Предстоящие онлайн')
-    def upcoming_online_sessions_readonly(self, obj):
-        count = obj.online_sessions.filter(
-            start_time__gt=timezone.now(),
-            status='scheduled',
-            is_active=True
-        ).count()
-        if count > 0:
-            return format_html(f'<span style="color: blue;">{count}</span>')
-        return format_html(f'<span style="color: gray;">{count}</span>')
+    @admin.display(description='Статус регистрации')
+    def registration_status_readonly(self, obj):
+        status = obj.registration_status
+        if status['is_active']:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">{}</span><br>'
+                '<small style="color: #666;">До: {}</small>',
+                status['display'],
+                obj.registration_ends_at.strftime('%d.%m.%Y %H:%M') if obj.registration_ends_at else '—'
+            )
+        elif status['is_ended']:
+            return format_html(
+                '<span style="color: orange; font-weight: bold;">{}</span><br>'
+                '<small style="color: #666;">Закрыта: {}</small>',
+                status['display'],
+                obj.registration_ends_at.strftime('%d.%m.%Y %H:%M') if obj.registration_ends_at else '—'
+            )
+        else:
+            return format_html('<span style="color: gray;">{}</span>', status['display'])
     
-    @admin.display(description='Текущие онлайн')
-    def ongoing_online_sessions_readonly(self, obj):
-        now = timezone.now()
-        count = obj.online_sessions.filter(
-            start_time__lte=now,
-            end_time__gte=now,
-            status='ongoing',
-            is_active=True
-        ).count()
-        if count > 0:
-            return format_html(f'<span style="color: green;">{count}</span>')
-        return format_html(f'<span style="color: gray;">{count}</span>')
+    @admin.display(description='Статус результатов')
+    def results_status_readonly(self, obj):
+        status = obj.results_status
+        if status['is_published']:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">{}</span><br>'
+                '<small style="color: #666;">Опубликованы: {}</small>',
+                status['display'],
+                obj.results_published_at.strftime('%d.%m.%Y %H:%M') if obj.results_published_at else '—'
+            )
+        elif status['status'] == 'in_preparation':
+            return format_html(
+                '<span style="color: blue; font-weight: bold;">{}</span><br>'
+                '<small style="color: #666;">Ожидаются: {}</small>',
+                status['display'],
+                obj.results_published_at.strftime('%d.%m.%Y %H:%M') if obj.results_published_at else '—'
+            )
+        else:
+            return format_html('<span style="color: gray;">{}</span>', status['display'])
     
-    @admin.display(description='Предстоящие оффлайн')
-    def upcoming_offline_sessions_readonly(self, obj):
-        count = obj.offline_sessions.filter(
-            start_time__gt=timezone.now(),
-            status='scheduled',
-            is_active=True
-        ).count()
-        if count > 0:
-            return format_html(f'<span style="color: blue;">{count}</span>')
-        return format_html(f'<span style="color: gray;">{count}</span>')
+    @admin.display(description='Статус сессий')
+    def sessions_status_readonly(self, obj):
+        status = obj.sessions_status
+        if status['is_ongoing']:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">{}</span><br>'
+                '<small style="color: #666;">Идут онлайн: {}, офлайн: {}</small>',
+                status['display'],
+                obj.online_sessions.filter(status='ongoing').count(),
+                obj.offline_sessions.filter(status='ongoing').count()
+            )
+        elif status['has_scheduled']:
+            return format_html(
+                '<span style="color: blue; font-weight: bold;">{}</span><br>'
+                '<small style="color: #666;">Запланировано: {}</small>',
+                status['display'],
+                obj.online_sessions.filter(status='scheduled').count() + 
+                obj.offline_sessions.filter(status='scheduled').count()
+            )
+        else:
+            return format_html('<span style="color: gray;">{}</span>', status['display'])
     
-    @admin.display(description='Текущие оффлайн')
-    def ongoing_offline_sessions_readonly(self, obj):
-        now = timezone.now()
-        count = obj.offline_sessions.filter(
-            start_time__lte=now,
-            end_time__gte=now,
-            status='ongoing',
-            is_active=True
-        ).count()
-        if count > 0:
-            return format_html(f'<span style="color: green;">{count}</span>')
-        return format_html(f'<span style="color: gray;">{count}</span>')
+    @admin.display(description='Текущий этап')
+    def current_stage_readonly(self, obj):
+        stage = obj.current_stage
+        icons = {
+            'registration': '📝',
+            'sessions': '🎤',
+            'results': '🏆',
+            'preparation': '🛠️',
+            'not_started': '⏸️',
+            'unknown': '❓'
+        }
+        icon = icons.get(stage['name'], '📋')
+        
+        if stage['status'] == 'active':
+            return format_html(
+                '<span style="color: green; font-weight: bold;">{} {}</span><br>'
+                '<small style="color: #666;">{}</small>',
+                icon, stage['display'], stage.get('detail', '')
+            )
+        elif stage['status'] == 'completed':
+            return format_html(
+                '<span style="color: gray; font-weight: bold;">{} {}</span><br>'
+                '<small style="color: #666;">Завершено</small>',
+                icon, stage['display']
+            )
+        else:
+            return format_html(
+                '<span style="color: blue; font-weight: bold;">{} {}</span>',
+                icon, stage['display']
+            )
+    
+    @admin.display(description='Прогресс')
+    def progress_percentage_readonly(self, obj):
+        progress = obj.progress_percentage
+        color = 'green' if progress >= 66 else 'orange' if progress >= 33 else 'blue'
+        html_template = (
+            '<div style="width: 200px; background: #e0e0e0; border-radius: 3px; overflow: hidden;">'
+            '<div style="width: {}%; height: 20px; background: {}; text-align: center; line-height: 20px; color: white;">'
+            '{}%'
+            '</div>'
+            '</div>'
+        )
+        return format_html(html_template, progress, color, progress)
     
     readonly_fields = [
         'created_at', 'updated_at', 
-        'is_open_readonly', 'is_private_readonly',
-        'has_online_sessions_readonly', 'has_offline_sessions_readonly', 
-        'upcoming_online_sessions_readonly', 'ongoing_online_sessions_readonly', 
-        'upcoming_offline_sessions_readonly', 'ongoing_offline_sessions_readonly'
+        'is_open_readonly', 'registration_ends_at_readonly', 
+        'results_published_at_readonly', 'closes_at_readonly',
+        'registration_status_readonly', 'sessions_status_readonly', 
+        'results_status_readonly', 'current_stage_readonly', 
+        'progress_percentage_readonly'
     ]
     
     fieldsets = (
@@ -277,24 +486,38 @@ class EventAdmin(admin.ModelAdmin):
         ('Даты и время', {
             'fields': ('created_at', 'updated_at', 'closes_at')
         }),
-        ('Статус', {
+        ('Регистрация и результаты', {
+            'fields': ('registration_ends_at', 'results_published_at'),
+            'description': 'Укажите даты для отслеживания этапов события'
+        }),
+        ('Статус и доступ', {
             'fields': ('status', 'is_active', 'is_private')
         }),
-        ('Статистика', {
+        ('Статусы и прогресс', {
             'fields': (
-                'is_open_readonly', 'is_private_readonly',
-                'has_online_sessions_readonly', 'has_offline_sessions_readonly',
-                'upcoming_online_sessions_readonly', 'ongoing_online_sessions_readonly',
-                'upcoming_offline_sessions_readonly', 'ongoing_offline_sessions_readonly'
+                'is_open_readonly', 'registration_ends_at_readonly', 
+                'results_published_at_readonly', 'closes_at_readonly',
+                'registration_status_readonly', 'sessions_status_readonly', 
+                'results_status_readonly', 'current_stage_readonly', 
+                'progress_percentage_readonly'
             ),
-            'classes': ('collapse',)
+            'classes': ('collapse', 'wide'),
+            'description': 'Информация о текущем состоянии события'
         }),
     )
     
-    inlines = [EventParticipantInline, OnlineEventInfoInline, OfflineSessionsInfoInline]
+    inlines = [
+        EventParticipantInline, 
+        OnlineEventInfoInline, 
+        OfflineSessionsInfoInline,
+        EventFileInline
+    ]
     
-    actions = ['publish_selected', 'archive_selected', 'duplicate_selected', 
-               'make_private_selected', 'make_public_selected']
+    actions = [
+        'publish_selected', 'archive_selected', 'duplicate_selected',
+        'extend_registration', 'publish_results', 
+        'make_private_selected', 'make_public_selected'
+    ]
     
     def save_model(self, request, obj, form, change):
         """Сохранение модели в админке"""
@@ -302,12 +525,8 @@ class EventAdmin(admin.ModelAdmin):
             if not obj.owner:  # Если владелец не указан
                 obj.owner = request.user  # Устанавливаем текущего пользователя
         
-        # Просто сохраняем - участника создаст метод save() модели
         super().save_model(request, obj, form, change)
     
-    # ... остальные методы класса EventAdmin без изменений ...
-    
-    # Исправленный метод owner_link
     @admin.display(description='Владелец')
     def owner_safe_link(self, obj):
         if not obj.owner:
@@ -315,7 +534,6 @@ class EventAdmin(admin.ModelAdmin):
         
         try:
             url = f'/admin/auth/user/{obj.owner.id}/change/'
-            # Безопасное получение имени пользователя
             if hasattr(obj.owner, 'get_full_name') and obj.owner.get_full_name():
                 display_name = obj.owner.get_full_name()
             elif hasattr(obj.owner, 'username'):
@@ -325,12 +543,8 @@ class EventAdmin(admin.ModelAdmin):
             else:
                 display_name = str(obj.owner)
             
-            return format_html(
-                '<a href="{}">{}</a>',
-                url,
-                display_name
-            )
-        except (AttributeError, KeyError):
+            return format_html('<a href="{}">{}</a>', url, display_name)
+        except Exception:
             return str(obj.owner)
     
     @admin.display(description='Статус', ordering='status')
@@ -348,25 +562,87 @@ class EventAdmin(admin.ModelAdmin):
             obj.get_status_display()
         )
     
-    @admin.display(description='Приватное')
+    @admin.display(description='Тип')
     def is_private_display(self, obj):
         if obj.is_private:
             return format_html(
-                '<span style="color: purple;">🔒 Приватное</span>'
+                '<span style="color: purple;" title="Приватное">🔒</span>'
             )
         return format_html(
-            '<span style="color: green;">🌐 Публичное</span>'
+            '<span style="color: green;" title="Публичное">🌐</span>'
         )
     
-    @admin.display(description='Открыто')
-    def is_open_display(self, obj):
-        if obj.is_open:
+    @admin.display(description='Регистрация')
+    def registration_status_display(self, obj):
+        status = obj.registration_status
+        if status['is_active']:
             return format_html(
-                '<span style="color: green;">✓ Открыто</span>'
+                '<span style="color: green;" title="Идет регистрация">📝</span>'
             )
-        return format_html(
-            '<span style="color: red;">✗ Закрыто</span>'
+        elif status['is_ended']:
+            return format_html(
+                '<span style="color: orange;" title="Регистрация закрыта">⏹️</span>'
+            )
+        else:
+            return format_html(
+                '<span style="color: gray;" title="Не началась">⏸️</span>'
+            )
+    
+    @admin.display(description='Результаты')
+    def results_status_display(self, obj):
+        status = obj.results_status
+        if status['is_published']:
+            return format_html(
+                '<span style="color: green;" title="Опубликованы">🏆</span>'
+            )
+        elif status['status'] == 'in_preparation':
+            return format_html(
+                '<span style="color: blue;" title="В подготовке">📊</span>'
+            )
+        else:
+            return format_html(
+                '<span style="color: gray;" title="Не готовы">📋</span>'
+            )
+    
+    @admin.display(description='Этап')
+    def current_stage_display(self, obj):
+        stage = obj.current_stage
+        icons = {
+            'registration': '📝',
+            'sessions': '🎤',
+            'results': '🏆',
+            'preparation': '🛠️',
+            'not_started': '⏸️',
+            'unknown': '❓'
+        }
+        icon = icons.get(stage['name'], '📋')
+        
+        if stage['status'] == 'active':
+            return format_html(
+                '<span style="color: green;" title="Активный этап: {}">{}</span>',
+                stage['display'], icon
+            )
+        elif stage['status'] == 'completed':
+            return format_html(
+                '<span style="color: gray;" title="Завершен: {}">{}</span>',
+                stage['display'], icon
+            )
+        else:
+            return format_html(
+                '<span style="color: blue;" title="{}">{}</span>',
+                stage['display'], icon
+            )
+    
+    @admin.display(description='Прогресс')
+    def progress_bar(self, obj):
+        progress = obj.progress_percentage
+        color = 'green' if progress >= 66 else 'orange' if progress >= 33 else 'blue'
+        html_template = (
+            '<div style="width: 50px; background: #e0e0e0; border-radius: 3px; overflow: hidden;" title="{}%">'
+            '<div style="width: {}%; height: 6px; background: {};"></div>'
+            '</div>'
         )
+        return format_html(html_template, progress, progress, color)
     
     @admin.display(description='Участники')
     def participant_count(self, obj):
@@ -374,7 +650,7 @@ class EventAdmin(admin.ModelAdmin):
             count = obj.event_participants.count()
             url = f'/admin/events/eventparticipant/?event__id={obj.id}'
             return format_html(
-                '<a href="{}">{}</a>',
+                '<a href="{}" title="Участники">{}</a>',
                 url,
                 count
             )
@@ -388,11 +664,11 @@ class EventAdmin(admin.ModelAdmin):
             if count > 0:
                 url = f'/admin/events/onlineeventinfo/?event__id={obj.id}'
                 return format_html(
-                    '<a href="{}">{}</a>',
+                    '<a href="{}" title="Онлайн-сессии">{}</a>',
                     url,
                     count
                 )
-            return count
+            return format_html('<span style="color: gray;">{}</span>', count)
         except Exception:
             return "0"
     
@@ -403,53 +679,43 @@ class EventAdmin(admin.ModelAdmin):
             if count > 0:
                 url = f'/admin/events/offlinesessionsinfo/?event__id={obj.id}'
                 return format_html(
-                    '<a href="{}">{}</a>',
+                    '<a href="{}" title="Оффлайн-сессии">{}</a>',
                     url,
                     count
                 )
-            return count
+            return format_html('<span style="color: gray;">{}</span>', count)
         except Exception:
             return "0"
     
-    @admin.display(description='Всего сессий')
-    def total_sessions_count(self, obj):
+    @admin.display(description='Файлы')
+    def files_count(self, obj):
         try:
-            online_count = obj.online_sessions.count()
-            offline_count = obj.offline_sessions.count()
-            total = online_count + offline_count
-            return format_html(
-                '<strong>{}</strong>',
-                total
-            )
+            count = obj.event_files.count()
+            if count > 0:
+                url = f'/admin/events/eventfile/?event__id={obj.id}'
+                return format_html(
+                    '<a href="{}" title="Файлы события" style="color: orange;">{}</a>',
+                    url,
+                    count
+                )
+            return format_html('<span style="color: gray;">{}</span>', count)
         except Exception:
             return "0"
     
     @admin.display(description='Создано', ordering='created_at')
     def created_at_display(self, obj):
-        return obj.created_at.strftime('%d.%m.%Y %H:%M') if obj.created_at else "—"
-    
-    @admin.display(description='Активно')
-    def is_active_display(self, obj):
-        if obj.is_active:
-            return format_html('<span style="color: green;">✓ Да</span>')
-        return format_html('<span style="color: red;">✗ Нет</span>')
+        return obj.created_at.strftime('%d.%m.%Y') if obj.created_at else "—"
     
     # Действия
     @admin.action(description='Опубликовать выбранные события')
     def publish_selected(self, request, queryset):
         updated = queryset.update(status='published')
-        self.message_user(
-            request, 
-            f'Опубликовано {updated} событий'
-        )
+        self.message_user(request, f'Опубликовано {updated} событий')
     
     @admin.action(description='Архивировать выбранные события')
     def archive_selected(self, request, queryset):
         updated = queryset.update(status='completed', is_active=False)
-        self.message_user(
-            request, 
-            f'Заархивировано {updated} событий'
-        )
+        self.message_user(request, f'Заархивировано {updated} событий')
     
     @admin.action(description='Дублировать выбранные события')
     def duplicate_selected(self, request, queryset):
@@ -463,31 +729,208 @@ class EventAdmin(admin.ModelAdmin):
             event.updated_at = timezone.now()
             event.save()
             duplicated += 1
-        self.message_user(
-            request, 
-            f'Дублировано {duplicated} событий'
-        )
+        self.message_user(request, f'Дублировано {duplicated} событий')
+    
+    @admin.action(description='Продлить регистрацию на 7 дней')
+    def extend_registration(self, request, queryset):
+        now = timezone.now()
+        updated_count = 0
+        for event in queryset:
+            if event.status == 'published' and event.is_active:
+                if event.registration_ends_at:
+                    event.registration_ends_at = event.registration_ends_at + timezone.timedelta(days=7)
+                else:
+                    event.registration_ends_at = now + timezone.timedelta(days=7)
+                event.save()
+                updated_count += 1
+        self.message_user(request, f'Регистрация продлена для {updated_count} событий')
+    
+    @admin.action(description='Опубликовать результаты сейчас')
+    def publish_results(self, request, queryset):
+        now = timezone.now()
+        updated_count = 0
+        for event in queryset:
+            if event.status == 'published' and event.is_active:
+                event.results_published_at = now
+                event.save()
+                updated_count += 1
+        self.message_user(request, f'Результаты опубликованы для {updated_count} событий')
     
     @admin.action(description='Сделать приватными')
     def make_private_selected(self, request, queryset):
         updated = queryset.update(is_private=True)
-        self.message_user(
-            request,
-            f'{updated} событий стали приватными'
-        )
+        self.message_user(request, f'{updated} событий стали приватными')
     
     @admin.action(description='Сделать публичными')
     def make_public_selected(self, request, queryset):
         updated = queryset.update(is_private=False)
-        self.message_user(
-            request,
-            f'{updated} событий стали публичными'
-        )
+        self.message_user(request, f'{updated} событий стали публичными')
     
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         qs = qs.select_related('owner')
-        qs = qs.prefetch_related('event_participants', 'online_sessions', 'offline_sessions')
+        qs = qs.prefetch_related('event_participants', 'online_sessions', 'offline_sessions', 'event_files')
+        return qs
+
+
+@admin.register(EventFile)
+class EventFileAdmin(admin.ModelAdmin):
+    """Админ-класс для файлов событий"""
+    list_display = [
+        'event_safe_link', 'storage_file_link', 'category_display',
+        'file_size_display', 'is_public_display', 'uploaded_by_safe_link',
+        'uploaded_at_display'
+    ]
+    
+    list_filter = [
+        EventFileCategoryFilter, 'is_public', 'uploaded_at', 'event'
+    ]
+    
+    search_fields = [
+        'event__name', 'storage_file__name', 'storage_file__original_name',
+        'description', 'uploaded_by__username', 'uploaded_by__email'
+    ]
+    
+    list_select_related = ['event', 'storage_file', 'uploaded_by']
+    
+    date_hierarchy = 'uploaded_at'
+    
+    readonly_fields = ['uploaded_at', 'file_url_display', 'file_size_display_readonly']
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('event', 'storage_file')
+        }),
+        ('Детали файла', {
+            'fields': ('category', 'description', 'display_order')
+        }),
+        ('Доступ', {
+            'fields': ('is_public', 'uploaded_by', 'uploaded_at')
+        }),
+        ('Информация о файле', {
+            'fields': ('file_url_display', 'file_size_display_readonly'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    actions = ['make_public_selected', 'make_private_selected']
+    
+    @admin.display(description='Событие', ordering='event__name')
+    def event_safe_link(self, obj):
+        if not obj.event:
+            return "—"
+        
+        try:
+            url = f'/admin/events/event/{obj.event.id}/change/'
+            return format_html(
+                '<a href="{}">{}</a>',
+                url,
+                obj.event.name
+            )
+        except Exception:
+            return str(obj.event)
+    
+    @admin.display(description='Файл', ordering='storage_file__name')
+    def storage_file_link(self, obj):
+        if not obj.storage_file:
+            return "—"
+        
+        try:
+            url = f'/admin/files/storagefile/{obj.storage_file.id}/change/'
+            return format_html(
+                '<a href="{}">{}</a>',
+                url,
+                obj.storage_file.name[:50]
+            )
+        except Exception:
+            return obj.storage_file.name[:50] if obj.storage_file else "—"
+    
+    @admin.display(description='Категория')
+    def category_display(self, obj):
+        icons = {
+            'agenda': '📋',
+            'presentation': '📊',
+            'document': '📄',
+            'photo': '🖼️',
+            'video': '🎬',
+            'audio': '🎵',
+            'result': '🏆',
+            'other': '📁',
+        }
+        icon = icons.get(obj.category, '📁')
+        return f"{icon} {obj.get_category_display()}"
+    
+    @admin.display(description='Размер')
+    def file_size_display(self, obj):
+        if obj.storage_file and hasattr(obj.storage_file, 'file_size_display'):
+            return obj.storage_file.file_size_display
+        return "—"
+    
+    @admin.display(description='Публичный')
+    def is_public_display(self, obj):
+        if obj.is_public:
+            return format_html('<span style="color: green;">✓</span>')
+        return format_html('<span style="color: red;">✗</span>')
+    
+    @admin.display(description='Загрузил', ordering='uploaded_by__username')
+    def uploaded_by_safe_link(self, obj):
+        if not obj.uploaded_by:
+            return "—"
+        
+        try:
+            url = f'/admin/auth/user/{obj.uploaded_by.id}/change/'
+            if hasattr(obj.uploaded_by, 'username'):
+                display_name = obj.uploaded_by.username
+            elif hasattr(obj.uploaded_by, 'email'):
+                display_name = obj.uploaded_by.email
+            else:
+                display_name = str(obj.uploaded_by)
+            
+            return format_html(
+                '<a href="{}">{}</a>',
+                url,
+                display_name
+            )
+        except Exception:
+            return str(obj.uploaded_by)
+    
+    @admin.display(description='Загружен', ordering='uploaded_at')
+    def uploaded_at_display(self, obj):
+        return obj.uploaded_at.strftime('%d.%m.%Y %H:%M') if obj.uploaded_at else "—"
+    
+    @admin.display(description='URL файла')
+    def file_url_display(self, obj):
+        if hasattr(obj, 'file_url') and obj.file_url:
+            return format_html(
+                '<a href="{}" target="_blank">🔗 Открыть файл</a>',
+                obj.file_url
+            )
+        return "—"
+    
+    @admin.display(description='Размер файла')
+    def file_size_display_readonly(self, obj):
+        if hasattr(obj, 'file_size') and obj.file_size:
+            if obj.storage_file and hasattr(obj.storage_file, 'file_size_display'):
+                return format_html(
+                    '<span style="color: #666;">{}</span>',
+                    obj.storage_file.file_size_display
+                )
+        return "—"
+    
+    # Действия
+    @admin.action(description='Сделать публичными')
+    def make_public_selected(self, request, queryset):
+        updated = queryset.update(is_public=True)
+        self.message_user(request, f'{updated} файлов стали публичными')
+    
+    @admin.action(description='Сделать приватными')
+    def make_private_selected(self, request, queryset):
+        updated = queryset.update(is_public=False)
+        self.message_user(request, f'{updated} файлов стали приватными')
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        qs = qs.select_related('event', 'storage_file', 'uploaded_by')
         return qs
 
 
@@ -515,7 +958,7 @@ class OnlineEventInfoAdmin(admin.ModelAdmin):
     
     date_hierarchy = 'start_time'
     
-    # Методы для readonly_fields (detail view) - русские отображения
+    # Методы для readonly_fields (detail view)
     @admin.display(description='Идет сейчас')
     def is_ongoing_readonly(self, obj):
         if obj.is_ongoing:
@@ -566,7 +1009,6 @@ class OnlineEventInfoAdmin(admin.ModelAdmin):
     
     actions = ['start_selected', 'complete_selected', 'cancel_selected']
     
-    # Исправленный метод event_link
     @admin.display(description='Событие', ordering='event__name')
     def event_safe_link(self, obj):
         if not obj.event:
@@ -708,7 +1150,7 @@ class OfflineSessionsInfoAdmin(admin.ModelAdmin):
     
     date_hierarchy = 'start_time'
     
-    # Методы для readonly_fields (detail view) - русские отображения
+    # Методы для readonly_fields (detail view)
     @admin.display(description='Идет сейчас')
     def is_ongoing_readonly(self, obj):
         if obj.is_ongoing:
@@ -757,7 +1199,6 @@ class OfflineSessionsInfoAdmin(admin.ModelAdmin):
     
     actions = ['start_selected', 'complete_selected', 'cancel_selected']
     
-    # Исправленный метод event_link
     @admin.display(description='Событие', ordering='event__name')
     def event_safe_link(self, obj):
         if not obj.event:
@@ -820,11 +1261,11 @@ class OfflineSessionsInfoAdmin(admin.ModelAdmin):
     
     @admin.display(description='Место проведения')
     def full_location_display(self, obj):
-        location = obj.full_location
-        if location:
+        if hasattr(obj, 'full_location') and obj.full_location:
+            location = obj.full_location
             return format_html(
                 '<span style="color: #555;">📍 {}</span>',
-                location
+                location[:50] + '...' if len(location) > 50 else location
             )
         return '—'
     
@@ -896,7 +1337,6 @@ class EventParticipantAdmin(admin.ModelAdmin):
     
     actions = ['confirm_selected', 'unconfirm_selected']
     
-    # Исправленный метод user_link
     @admin.display(description='Участник', ordering='user__username')
     def user_safe_link(self, obj):
         if not obj.user:
@@ -904,7 +1344,6 @@ class EventParticipantAdmin(admin.ModelAdmin):
         
         try:
             url = f'/admin/auth/user/{obj.user.id}/change/'
-            # Безопасное получение имени
             if hasattr(obj.user, 'get_full_name') and obj.user.get_full_name():
                 display_name = obj.user.get_full_name()
             elif hasattr(obj.user, 'username'):
@@ -922,7 +1361,6 @@ class EventParticipantAdmin(admin.ModelAdmin):
         except Exception:
             return str(obj.user)
     
-    # Исправленный метод event_link
     @admin.display(description='Событие', ordering='event__name')
     def event_safe_link(self, obj):
         if not obj.event:
@@ -1022,7 +1460,6 @@ class SessionAttendanceAdmin(admin.ModelAdmin):
     
     actions = ['mark_completed', 'mark_no_show']
     
-    # Исправленный метод participant_link
     @admin.display(description='Участник', ordering='participant__username')
     def participant_safe_link(self, obj):
         if not obj.participant:
@@ -1045,7 +1482,6 @@ class SessionAttendanceAdmin(admin.ModelAdmin):
         except Exception:
             return str(obj.participant)
     
-    # Исправленный метод session_link
     @admin.display(description='Сессия', ordering='session__session_name')
     def session_safe_link(self, obj):
         if not obj.session:
@@ -1160,7 +1596,6 @@ class SessionMaterialAdmin(admin.ModelAdmin):
     
     actions = ['make_public', 'make_private']
     
-    # Исправленный метод session_link
     @admin.display(description='Сессия', ordering='session__session_name')
     def session_safe_link(self, obj):
         if not obj.session:
@@ -1207,7 +1642,6 @@ class SessionMaterialAdmin(admin.ModelAdmin):
             pass
         return '—'
     
-    # Исправленный метод uploaded_by_link
     @admin.display(description='Загрузил', ordering='uploaded_by__username')
     def uploaded_by_safe_link(self, obj):
         if not obj.uploaded_by:

@@ -4,8 +4,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import (
     Event, EventParticipant, OnlineEventInfo, 
-    SessionAttendance, SessionMaterial, OfflineSessionsInfo
+    SessionAttendance, SessionMaterial, OfflineSessionsInfo, EventFile
 )
+from files.serializers import StorageFileSerializer
 
 User = get_user_model()
 
@@ -64,6 +65,27 @@ class OfflineSessionSimpleSerializer(serializers.ModelSerializer):
 
 
 # ====================
+# Сериализаторы для файлов событий
+# ====================
+
+class EventFileSimpleSerializer(serializers.ModelSerializer):
+    """Упрощенный сериализатор для файлов событий (для списка)"""
+    file_name = serializers.CharField(source='storage_file.name', read_only=True)
+    file_size = serializers.IntegerField(source='storage_file.file_size', read_only=True)
+    file_url = serializers.CharField(source='storage_file.file_url', read_only=True)
+    file_size_display = serializers.CharField(source='storage_file.file_size_display', read_only=True)
+    
+    class Meta:
+        model = EventFile
+        fields = [
+            'id', 'category', 'description', 'is_public',
+            'file_name', 'file_size', 'file_size_display', 'file_url',
+            'uploaded_at', 'display_order'
+        ]
+        read_only_fields = ['uploaded_at']
+
+
+# ====================
 # Основные сериализаторы
 # ====================
 
@@ -76,13 +98,23 @@ class EventSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    
+    # Статусы и подсчеты
     is_open = serializers.BooleanField(read_only=True)
     has_online_sessions = serializers.BooleanField(read_only=True)
     has_offline_sessions = serializers.BooleanField(read_only=True)
     online_sessions_count = serializers.IntegerField(read_only=True)
     offline_sessions_count = serializers.IntegerField(read_only=True)
     participants_count = serializers.SerializerMethodField()
+    files_count = serializers.IntegerField(read_only=True)
     is_private = serializers.BooleanField(default=False)
+    
+    # Статусы этапов события
+    registration_status = serializers.SerializerMethodField()
+    sessions_status = serializers.SerializerMethodField()
+    results_status = serializers.SerializerMethodField()
+    current_stage = serializers.SerializerMethodField()
+    progress_percentage = serializers.SerializerMethodField()
     
     # Краткая информация о сессиях
     upcoming_online_sessions = serializers.SerializerMethodField()
@@ -92,20 +124,52 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'owner', 'owner_id', 'name', 'description', 'status',
-            'created_at', 'closes_at', 'image_url', 'updated_at', 'is_active',
+            'created_at', 'closes_at', 'registration_ends_at', 'results_published_at',
+            'image_url', 'updated_at', 'is_active', 'is_private',
+            
+            # Статусы
             'is_open', 'has_online_sessions', 'has_offline_sessions',
             'online_sessions_count', 'offline_sessions_count', 'participants_count',
-            'upcoming_online_sessions', 'upcoming_offline_sessions', 'is_private'
+            'files_count',
+            
+            # Статусы этапов
+            'registration_status', 'sessions_status', 'results_status',
+            'current_stage', 'progress_percentage',
+            
+            # Сессии
+            'upcoming_online_sessions', 'upcoming_offline_sessions'
         ]
         read_only_fields = [
             'created_at', 'updated_at', 'owner', 'is_open',
             'has_online_sessions', 'has_offline_sessions',
-            'online_sessions_count', 'offline_sessions_count'
+            'online_sessions_count', 'offline_sessions_count',
+            'files_count', 'registration_status', 'sessions_status',
+            'results_status', 'current_stage', 'progress_percentage'
         ]
     
     def get_participants_count(self, obj):
         """Получить количество участников события"""
         return obj.event_participants.filter(is_confirmed=True).count()
+    
+    def get_registration_status(self, obj):
+        """Статус регистрации"""
+        return obj.registration_status
+    
+    def get_sessions_status(self, obj):
+        """Статус сессий"""
+        return obj.sessions_status
+    
+    def get_results_status(self, obj):
+        """Статус результатов"""
+        return obj.results_status
+    
+    def get_current_stage(self, obj):
+        """Текущий этап"""
+        return obj.current_stage
+    
+    def get_progress_percentage(self, obj):
+        """Процент завершения"""
+        return obj.progress_percentage
     
     def get_upcoming_online_sessions(self, obj):
         """Получить предстоящие онлайн сессии"""
@@ -127,13 +191,36 @@ class EventSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Валидация данных события"""
+        errors = {}
+        
+        # Проверка даты окончания
         closes_at = data.get('closes_at')
-        if closes_at and closes_at <= serializers.DateTimeField().to_representation(
-            serializers.DateTimeField().to_internal_value(data.get('created_at', serializers.DateTimeField().to_internal_value('now')))
-        ):
-            raise serializers.ValidationError({
-                'closes_at': 'Дата закрытия должна быть в будущем'
-            })
+        if closes_at and closes_at <= timezone.now():
+            errors['closes_at'] = 'Дата окончания должна быть в будущем'
+        
+        # Проверка даты окончания регистрации
+        registration_ends_at = data.get('registration_ends_at')
+        if registration_ends_at:
+            if registration_ends_at <= timezone.now():
+                errors['registration_ends_at'] = 'Дата окончания регистрации должна быть в будущем'
+            
+            # Проверяем, что регистрация не заканчивается позже самого события
+            if closes_at and registration_ends_at > closes_at:
+                errors['registration_ends_at'] = 'Регистрация не может заканчиваться позже самого события'
+        
+        # Проверка даты подведения итогов
+        results_published_at = data.get('results_published_at')
+        if results_published_at:
+            if results_published_at <= timezone.now():
+                errors['results_published_at'] = 'Дата подведения итогов должна быть в будущем'
+            
+            # Проверяем, что итоги публикуются не раньше окончания события
+            if closes_at and results_published_at < closes_at:
+                errors['results_published_at'] = 'Итоги не могут публиковаться раньше окончания события'
+        
+        if errors:
+            raise serializers.ValidationError(errors)
+        
         return data
     
     def create(self, validated_data):
@@ -141,7 +228,6 @@ class EventSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user:
             validated_data['owner'] = request.user
-        # Теперь участника создаст метод save() модели Event
         return super().create(validated_data)
 
 
@@ -188,6 +274,13 @@ class EventParticipantSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'event': 'Событие не активно'
             })
+        
+        # Проверяем, что регистрация еще открыта
+        if event and event.registration_ends_at:
+            if timezone.now() > event.registration_ends_at:
+                raise serializers.ValidationError({
+                    'event': 'Регистрация на это событие уже закрыта'
+                })
         
         return data
 
@@ -376,19 +469,19 @@ class EventDetailSerializer(EventSerializer):
         many=True,
         read_only=True
     )
+    files = EventFileSimpleSerializer(source='event_files', many=True, read_only=True)
     current_user_participation = serializers.SerializerMethodField()
     
     class Meta(EventSerializer.Meta):
         fields = EventSerializer.Meta.fields + [
             'online_sessions', 'offline_sessions', 'participants',
-            'current_user_participation'
+            'files', 'current_user_participation'
         ]
     
     def get_current_user_participation(self, obj):
         """Получить информацию об участии текущего пользователя"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            # Ищем участие пользователя в этом событии
             participation = EventParticipant.objects.filter(
                 event=obj,
                 user=request.user,
@@ -417,7 +510,6 @@ class EventWithParticipationSerializer(EventSerializer):
         """Получить информацию об участии текущего пользователя"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            # Ищем участие пользователя в этом событии
             participation = EventParticipant.objects.filter(
                 event=obj,
                 user=request.user,

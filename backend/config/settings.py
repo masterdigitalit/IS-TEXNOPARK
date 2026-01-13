@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+# Загружаем .env файл
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,10 +46,12 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_spectacular',
+    'storages',  # MinIO/S3 storage
     # Ваши приложения
     'user',  # или 'users', в зависимости от названия вашего приложения
     'events',
-    'notifications'
+    'notifications',
+    'files',  # Приложение для работы с файлами
 ]
 
 
@@ -144,7 +150,12 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.BrowsableAPIRenderer',
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'PAGE_SIZE': 10,
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
+    ],
 }
 
 # Настройки DRF Spectacular
@@ -313,3 +324,35 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=60),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
 }
+
+# ==============================
+# MinIO/S3 Storage Configuration
+# ==============================
+
+# MinIO credentials
+AWS_ACCESS_KEY_ID = os.getenv('MINIO_ACCESS_KEY', 'minioadmin')
+AWS_SECRET_ACCESS_KEY = os.getenv('MINIO_SECRET_KEY', 'minioadmin')
+AWS_STORAGE_BUCKET_NAME = os.getenv('MINIO_BUCKET_NAME', 'media')
+AWS_S3_ENDPOINT_URL = os.getenv('MINIO_ENDPOINT', 'http://localhost:9000')
+AWS_S3_REGION_NAME = os.getenv('MINIO_REGION', 'us-east-1')
+
+# MinIO specific settings
+AWS_S3_CUSTOM_DOMAIN = None
+AWS_S3_ADDRESSING_STYLE = 'path'
+AWS_S3_USE_SSL = os.getenv('MINIO_USE_SSL', 'False') == 'True'
+
+AWS_DEFAULT_ACL = 'public-read'
+AWS_QUERYSTRING_AUTH = False
+AWS_S3_FILE_OVERWRITE = False
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
+
+# Для MinIO нужно указать signature version v4
+AWS_S3_SIGNATURE_VERSION = 's3v4'
+
+# Использовать MinIO для медиа файлов
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
+# URL для доступа к файлам
+MEDIA_URL = f'{AWS_S3_ENDPOINT_URL}/{AWS_STORAGE_BUCKET_NAME}/'
