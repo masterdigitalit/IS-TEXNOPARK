@@ -5,14 +5,16 @@ services:
     image: minio/minio:latest
     container_name: minio
     ports:
-      - "9000:9000"  # API порт
-      - "9001:9001"  # Console порт
+      - "${MINIO_API_PORT:-9000}:9000"        # API порт
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # Console порт
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-http://localhost:9001}
+      # URL, по которому открывается веб-консоль MinIO (внешний адрес)
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-http://localhost:${MINIO_CONSOLE_PORT:-9001}}
     volumes:
       - minio_data:/data
+    # Console-address использует внутренний порт 9001
     command: server /data --console-address ":9001"
     restart: unless-stopped
     healthcheck:

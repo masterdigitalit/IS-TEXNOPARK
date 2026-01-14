@@ -31,8 +31,8 @@
 
 1. В Dokploy создайте новое приложение из docker-compose
 2. Используйте файл: `docker-compose.minio.yml`
-3. Настройте переменные окружения (см. ниже)
-4. Порт API: `9000`, Console: `9001`
+3. Настройте переменные окружения (см. ниже) — в том числе порты
+4. Порты берутся из переменных `MINIO_API_PORT` и `MINIO_CONSOLE_PORT` (по умолчанию 9000 и 9001)
 
 ## Переменные окружения
 
@@ -83,6 +83,8 @@ MINIO_USE_SSL=False
 Основные переменные (см. `.env.minio.example`):
 
 ```env
+MINIO_API_PORT=9000
+MINIO_CONSOLE_PORT=9001
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=minioadmin
 MINIO_BROWSER_REDIRECT_URL=http://your-domain:9001
