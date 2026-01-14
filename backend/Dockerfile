@@ -18,15 +18,17 @@ COPY . .
 # Создание директории для статики
 RUN mkdir -p /app/staticfiles
 
-# Порт backend внутри контейнера (можно переопределить через переменную окружения BACKEND_PORT)
-ENV BACKEND_PORT=23458
+# Порт backend можно задать через переменную окружения BACKEND_PORT при запуске контейнера
+# По умолчанию 8000, но можно переопределить через ENV в Dokploy
+ENV BACKEND_PORT=8000
 
 # Сборка статики (если нужно)
 # RUN python manage.py collectstatic --noinput
 
-# Порт для приложения (должен совпадать с BACKEND_PORT)
-EXPOSE ${BACKEND_PORT}
+# EXPOSE - это метаданные, реальный порт задается через ENV при запуске
+# Если нужен другой порт, задайте BACKEND_PORT в переменных окружения Dokploy
+EXPOSE 8000
 
-# Команда запуска
+# Команда запуска (использует переменную BACKEND_PORT из окружения)
 CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${BACKEND_PORT} --workers 3"]
 
