@@ -19,7 +19,7 @@ COPY . .
 RUN mkdir -p /app/staticfiles
 
 # Порт backend внутри контейнера (можно переопределить через переменную окружения BACKEND_PORT)
-ENV BACKEND_PORT=8000
+ENV BACKEND_PORT=23458
 
 # Сборка статики (если нужно)
 # RUN python manage.py collectstatic --noinput
