@@ -18,12 +18,15 @@ COPY . .
 # Создание директории для статики
 RUN mkdir -p /app/staticfiles
 
+# Порт backend внутри контейнера (можно переопределить через переменную окружения BACKEND_PORT)
+ENV BACKEND_PORT=8000
+
 # Сборка статики (если нужно)
 # RUN python manage.py collectstatic --noinput
 
-# Порт для приложения
-EXPOSE 8000
+# Порт для приложения (должен совпадать с BACKEND_PORT)
+EXPOSE ${BACKEND_PORT}
 
 # Команда запуска
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${BACKEND_PORT} --workers 3"]
 

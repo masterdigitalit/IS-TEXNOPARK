@@ -17,8 +17,8 @@
 
 1. В Dokploy создайте новое приложение
 2. Укажите путь к Dockerfile: `backend/Dockerfile`
-3. Настройте переменные окружения (см. ниже)
-4. Укажите порт: `8000`
+3. Настройте переменные окружения (см. ниже). Важно: задайте `BACKEND_PORT`, он должен совпадать с портом приложения в Dokploy.
+4. Порт backend снаружи = `BACKEND_PORT` (по умолчанию 8000)
 
 ### Frontend (Bun)
 
@@ -59,6 +59,7 @@ cp .env.minio.example .env.minio
 Основные переменные (см. `backend/.env.example`):
 
 ```env
+BACKEND_PORT=8000
 SECRET_KEY=your-secret-key-here
 DEBUG=False
 ALLOWED_HOSTS=your-domain.com,localhost
