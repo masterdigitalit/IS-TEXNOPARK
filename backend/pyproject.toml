@@ -18,5 +18,6 @@ dependencies = [
     "minio>=7.2.20",
     "python-dotenv==1.2.1",
     "rest-framework-simplejwt>=0.0.2",
+    "psycopg2-binary==2.9.9",
     "sqlparse==0.5.4",
 ]
