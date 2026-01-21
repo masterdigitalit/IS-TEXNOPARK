@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import plugin from "bun-plugin-tailwind";
 import { existsSync } from "fs";
-import { rm } from "fs/promises";
+import { copyFile, readFile, rm, writeFile } from "fs/promises";
 import path from "path";
 
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -136,6 +136,34 @@ const result = await Bun.build({
 });
 
 const end = performance.now();
+
+const ensureRuntimeConfig = async (outputDir: string) => {
+  const configSource = path.join(process.cwd(), "src", "config.js");
+  const configDest = path.join(outputDir, "config.js");
+
+  if (existsSync(configSource)) {
+    await copyFile(configSource, configDest);
+  }
+
+  const indexPath = path.join(outputDir, "index.html");
+  if (!existsSync(indexPath)) {
+    return;
+  }
+
+  const indexHtml = await readFile(indexPath, "utf-8");
+  if (indexHtml.includes("config.js")) {
+    return;
+  }
+
+  const scriptTag = '    <script src="./config.js"></script>\n';
+  const moduleScriptRegex = /<script type="module"[^>]*><\/script>/;
+  const updatedHtml = moduleScriptRegex.test(indexHtml)
+    ? indexHtml.replace(moduleScriptRegex, `${scriptTag}$&`)
+    : indexHtml.replace("</head>", `${scriptTag}  </head>`);
+  await writeFile(indexPath, updatedHtml);
+};
+
+await ensureRuntimeConfig(outdir);
 
 const outputTable = result.outputs.map(output => ({
   File: path.relative(process.cwd(), output.path),
