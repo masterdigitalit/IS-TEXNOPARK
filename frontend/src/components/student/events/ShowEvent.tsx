@@ -803,7 +803,10 @@ export const EventDetails: React.FC = () => {
               ) : canRegister ? (
                 <button
                   onClick={handleRegistration}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  className="inline-flex items-center px-4 py-2 text-white rounded-lg"
+                  style={{ backgroundColor: 'rgba(130, 43, 43, 1)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(100, 30, 30, 1)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(130, 43, 43, 1)'}
                 >
                   <ArrowRightCircleIcon className="h-5 w-5 mr-2" />
                   Принять участие
@@ -1789,7 +1792,10 @@ export const EventDetails: React.FC = () => {
                   
                   <button
                     onClick={handleRegistration}
-                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    className="w-full inline-flex items-center justify-center px-4 py-3 text-white rounded-lg font-medium"
+                    style={{ backgroundColor: 'rgba(130, 43, 43, 1)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(100, 30, 30, 1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(130, 43, 43, 1)'}
                   >
                     <ArrowRightCircleIcon className="h-5 w-5 mr-2" />
                     Принять участие
@@ -1810,7 +1816,10 @@ export const EventDetails: React.FC = () => {
                 {canRegister && (
                   <button
                     onClick={handleRegistration}
-                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    className="w-full inline-flex items-center justify-center px-4 py-3 text-white rounded-lg font-medium"
+                    style={{ backgroundColor: 'rgba(130, 43, 43, 1)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(100, 30, 30, 1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(130, 43, 43, 1)'}
                   >
                     <ArrowRightCircleIcon className="h-5 w-5 mr-2" />
                     Принять участие

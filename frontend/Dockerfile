@@ -1,4 +1,4 @@
-FROM oven/bun:1
+FROM oven/bun:1 AS build
 
 WORKDIR /app
 
@@ -12,10 +12,16 @@ COPY . .
 # Сборка приложения (создает dist/)
 RUN bun run build
 
-# Порт для приложения
+FROM nginx:1.27-alpine
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist/ /usr/share/nginx/html/
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+
+RUN chmod +x /docker-entrypoint.sh
+
+ENV NODE_ENV=production
 EXPOSE 3000
 
-# Команда запуска (Bun serve будет раздавать статику из dist/)
-ENV NODE_ENV=production
-CMD ["bun", "src/index.ts"]
-
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

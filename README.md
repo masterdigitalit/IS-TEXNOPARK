@@ -29,8 +29,10 @@
 
 1. В Dokploy создайте новое приложение
 2. Укажите путь к Dockerfile: `frontend/Dockerfile`
-3. Настройте переменные окружения
+3. Настройте переменные окружения (см. ниже)
 4. Укажите порт: `3000`
+5. В переменных окружения задайте `API_BASE_URL` (например, `https://api.your-domain.com`)
+6. При старте контейнер генерирует `/config.js` с этим значением
 
 ### MinIO (отдельный сервис)
 
@@ -104,6 +106,14 @@ MINIO_ROOT_PASSWORD=minioadmin
 MINIO_BROWSER_REDIRECT_URL=http://your-domain:9001
 ```
 
+### Frontend (runtime env)
+
+Основные переменные (см. `frontend/.env.example`):
+
+```env
+API_BASE_URL=http://localhost:8000
+```
+
 ## Локальная разработка
 
 ### Запуск MinIO
@@ -137,4 +147,3 @@ bun run dev
 - Настройте `ALLOWED_HOSTS` для вашего домена (через запятую, без пробелов)
 - После запуска MinIO создайте bucket с именем из `MINIO_BUCKET_NAME` через веб-консоль (порт 9001)
 - Для первого запуска backend выполните миграции: `python manage.py migrate`
-

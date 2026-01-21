@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 # Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -18,7 +21,7 @@ COPY . .
 # Создание директории для статики
 RUN mkdir -p /app/staticfiles
 
-# Порт backend можно задать через переменную окружения BACKEND_PORT при запуске контейнера
+# Порт backend можно задать через переменную окружения BACKEND_PORT или PORT
 # По умолчанию 8000, но можно переопределить через ENV в Dokploy
 ENV BACKEND_PORT=8000
 
@@ -29,6 +32,5 @@ ENV BACKEND_PORT=8000
 # Если нужен другой порт, задайте BACKEND_PORT в переменных окружения Dokploy
 EXPOSE 8000
 
-# Команда запуска (использует переменную BACKEND_PORT из окружения)
-CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${BACKEND_PORT} --workers 3"]
-
+# Команда запуска (использует PORT, если задан, иначе BACKEND_PORT)
+CMD ["sh", "-c", "gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-${BACKEND_PORT}} --workers ${GUNICORN_WORKERS:-3}"]

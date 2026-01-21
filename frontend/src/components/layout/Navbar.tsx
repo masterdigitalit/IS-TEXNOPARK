@@ -175,7 +175,7 @@ const Navbar = () => {
                   </div>
                   
                   <div className="relative">
-                    <div className={`w-10 h-10 ${getRoleColor()} rounded-full flex items-center justify-center text-white font-bold`}>
+                    <div className={`w-10 h-10 ${getRoleColor()} rounded-lg flex items-center justify-center text-white font-bold border border-black`}>
                       {getAvatarInitials()}
                     </div>
                     <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
@@ -192,7 +192,7 @@ const Navbar = () => {
                     {/* User Info */}
                     <div className="px-4 py-3 border-b border-gray-100">
                       <div className="flex items-center space-x-3">
-                        <div className={`w-12 h-12 ${getRoleColor()} rounded-full flex items-center justify-center text-white font-bold text-lg`}>
+                        <div className={`w-12 h-12 ${getRoleColor()} rounded-lg flex items-center justify-center text-white font-bold text-lg border border-black`}>
                           {getAvatarInitials()}
                         </div>
                         <div>
