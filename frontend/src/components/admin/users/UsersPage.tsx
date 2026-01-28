@@ -57,10 +57,7 @@ export const UserList: React.FC = () => {
     
     try {
       const response = await apiClient.get<ApiResponse>('/api/v1/users/', {
-        params: {
-          page: pageNumber,
-          page_size: 10,
-        },
+    
       });
 
       setUsers(response.results);

@@ -15,7 +15,7 @@ router.register(r'', UserViewSet, basename='user')
 
 urlpatterns = [
     # JWT аутентификация (стандартные эндпоинты)
-	path('', include(router.urls)),
+	# path('', include(router.urls)),
     path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),

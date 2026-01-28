@@ -97,7 +97,7 @@ export const EventList: React.FC = () => {
         params.search = searchTerm;
       }
       
-      const response = await apiClient.get<ApiResponse>('/api/v1/events/', { params });
+      const response = await apiClient.get<ApiResponse>('/api/v1/events/all/');
       
       setEvents(response.results);
       setTotalCount(response.count);
