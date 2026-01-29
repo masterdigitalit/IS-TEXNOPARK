@@ -19,7 +19,8 @@ urlpatterns = [
     # path('api/v1/events/', include('events.urls')),
 
     path('api/v1/files/', include('files.urls')),
-    
+    path('api/v1/stats/', include('stats.urls')),
+
     # Swagger/Redoc
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
