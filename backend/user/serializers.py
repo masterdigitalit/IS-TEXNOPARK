@@ -7,13 +7,13 @@ from .models import User
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
-        write_only=True, 
-        required=True, 
-        validators=[validate_password],
+        write_only=True,
+        required=True,
+        min_length=6,  # Минимум 6 символов вместо стандартных 8
         style={'input_type': 'password'}
     )
     password_confirm = serializers.CharField(
-        write_only=True, 
+        write_only=True,
         required=True,
         style={'input_type': 'password'}
     )
@@ -28,7 +28,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'email': {'required': True},
             'first_name': {'required': True, 'error_messages': {'required': _('Имя обязательно для заполнения')}},
-            'middle_name': {'required': True, 'error_messages': {'required': _('Фамилия обязательна для заполнения')}},
+            'middle_name': {'required': False, 'error_messages': {'required': _('Фамилия обязательна для заполнения')}},
             'last_name': {'required': False},
             'phone': {'required': False},
             'avatar_url': {'required': False},

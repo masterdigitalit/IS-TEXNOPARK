@@ -27,7 +27,8 @@ import {
   DocumentArrowDownIcon,
   FolderIcon,
   FolderPlusIcon,
-  XMarkIcon
+  XMarkIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -779,7 +780,15 @@ export const EventDetails: React.FC = () => {
               </div>
             </div>
             
-            <div className="mt-4 md:mt-0 flex space-x-3">
+            <div className="mt-4 md:mt-0 flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => navigate(`/events/${event.id}/statistics`)}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                <ChartBarIcon className="h-5 w-5 mr-2" />
+                Статистика
+              </button>
+              
               {isOwner ? (
                 <div className="flex items-center bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
                   <UserIcon className="h-5 w-5 mr-2" />
@@ -1501,7 +1510,7 @@ export const EventDetails: React.FC = () => {
                                 <div className="text-sm font-medium text-gray-500 mb-2">Ссылка для подключения</div>
                                 <div className="flex items-center p-3 bg-gray-50 text-gray-600 rounded-lg">
                                   <BellAlertIcon className="h-5 w-5 mr-3 text-gray-400" />
-                                  <span>Для получения ссылки необходимо зарегистрироваться на событие</span>
+                                  <span>Для получения ссылки не������бходимо зарегистрироваться на событие</span>
                                 </div>
                               </div>
                             )}
@@ -1734,7 +1743,7 @@ export const EventDetails: React.FC = () => {
                   </div>
                   
                   <button
-                    onClick={() => navigate(`/admin/events/${event.id}`)}
+                    onClick={() => navigate(`/admin/events/${event.id}/manage`)}
                     className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                   >
                     Управление событием
@@ -1863,15 +1872,6 @@ export const EventDetails: React.FC = () => {
                   <DocumentIcon className="h-5 w-5 mr-2" />
                   Файлы и проекты
                 </button>
-                
-                {isOwner && (
-                  <button
-                    onClick={() => navigate(`/admin/events/${event.id}`)}
-                    className="w-full inline-flex items-center justify-center px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
-                  >
-                    Управление событием
-                  </button>
-                )}
               </div>
             </div>
 

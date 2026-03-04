@@ -15,9 +15,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     email: '',
     password: '',
     password_confirm: '',
-    first_name: '',
-    middle_name: '',  // Фамилия
-    last_name: '',    // Отчество
+    first_name: '',  // Имя
+    last_name: '',   // Фамилия
+    middle_name: '', // Отчество (необязательно)
     phone: '',
     avatar_url: '',
   });
@@ -55,24 +55,24 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
 
     // Проверка паролей
     if (!formData.password) {
-      validationErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      validationErrors.password = 'Password must be at least 8 characters long';
+      validationErrors.password = 'Пароль обязателен';
+    } else if (formData.password.length < 6) {
+      validationErrors.password = 'Пароль должен быть не менее 6 символов';
     }
 
     if (!formData.password_confirm) {
-      validationErrors.password_confirm = 'Please confirm your password';
+      validationErrors.password_confirm = 'Подтвердите пароль';
     } else if (formData.password !== formData.password_confirm) {
-      validationErrors.password_confirm = 'Passwords do not match';
+      validationErrors.password_confirm = 'Пароли не совпадают';
     }
 
     // Проверка обязательных полей
     if (!formData.first_name) {
-      validationErrors.first_name = 'First name is required';
+      validationErrors.first_name = 'Имя обязательно';
     }
 
-    if (!formData.middle_name) {
-      validationErrors.middle_name = 'Last name is required';
+    if (!formData.last_name) {
+      validationErrors.last_name = 'Фамилия обязательна';
     }
 
     if (Object.keys(validationErrors).length > 0) {
@@ -83,14 +83,14 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
     setIsLoading(true);
 
     try {
-      // Подготавливаем данные для отправки - ВКЛЮЧАЕМ password_confirm!
+      // Подготавливаем данные для отправки
       const registerData = {
         email: formData.email,
         password: formData.password,
-        password_confirm: formData.password_confirm,  // ВАЖНО: добавляем это поле
+        password_confirm: formData.password_confirm,
         first_name: formData.first_name,
-        middle_name: formData.middle_name,
-        last_name: formData.last_name || null,
+        last_name: formData.last_name,
+        middle_name: formData.middle_name || null,
         phone: formData.phone || null,
         avatar_url: formData.avatar_url || null,
       };
@@ -101,15 +101,17 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
       onSuccess?.();
       navigate('/login-redirect')
     } catch (err: any) {
-      console.error('Registration error:', err); // Для отладки
+      console.error('Registration error:', err);
+      console.error('Error response:', err.response);
+      console.error('Error data:', err.response?.data);
       
       // Обработка ошибок сервера
       if (err.response?.data) {
         const data = err.response.data;
-        console.log('Server error response:', data); // Для отладки
-        
+        console.log('Server error response:', data);
+
         const serverErrors: {[key: string]: string} = {};
-        
+
         // Парсим ошибки Django
         Object.keys(data).forEach(key => {
           if (Array.isArray(data[key])) {
@@ -126,10 +128,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
         } else if (data.non_field_errors) {
           setError(Array.isArray(data.non_field_errors) ? data.non_field_errors[0] : data.non_field_errors);
         } else {
-          setError('Registration failed. Please check your data.');
+          setError('Ошибка регистрации. Проверьте данные.');
         }
       } else {
-        setError(err.message || 'Registration failed');
+        setError(err.message || 'Ошибка регистрации');
       }
     } finally {
       setIsLoading(false);
@@ -170,27 +172,6 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label htmlFor="middle_name" className="block text-sm font-medium text-gray-700 mb-1">
-              Фамилия *
-            </label>
-            <input
-              id="middle_name"
-              name="middle_name"
-              type="text"
-              value={formData.middle_name}
-              onChange={handleChange}
-              required
-              placeholder="Ivanov"
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                errors.middle_name ? 'border-red-500' : 'border-gray-300'
-              }`}
-            />
-            {errors.middle_name && (
-              <p className="mt-1 text-sm text-red-600">{errors.middle_name}</p>
-            )}
-          </div>
-
-          <div>
             <label htmlFor="first_name" className="block text-sm font-medium text-gray-700 mb-1">
               Имя *
             </label>
@@ -213,7 +194,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
 
           <div>
             <label htmlFor="last_name" className="block text-sm font-medium text-gray-700 mb-1">
-              Отчество
+              Фамилия *
             </label>
             <input
               id="last_name"
@@ -221,13 +202,34 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({
               type="text"
               value={formData.last_name}
               onChange={handleChange}
-              placeholder="Ivanovich"
+              required
+              placeholder="Ivanov"
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
                 errors.last_name ? 'border-red-500' : 'border-gray-300'
               }`}
             />
             {errors.last_name && (
               <p className="mt-1 text-sm text-red-600">{errors.last_name}</p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="middle_name" className="block text-sm font-medium text-gray-700 mb-1">
+              Отчество
+            </label>
+            <input
+              id="middle_name"
+              name="middle_name"
+              type="text"
+              value={formData.middle_name}
+              onChange={handleChange}
+              placeholder="Ivanovich"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                errors.middle_name ? 'border-red-500' : 'border-gray-300'
+              }`}
+            />
+            {errors.middle_name && (
+              <p className="mt-1 text-sm text-red-600">{errors.middle_name}</p>
             )}
           </div>
         </div>

@@ -85,11 +85,11 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
   const handleDeleteNotification = async (id: number) => {
     try {
       await notificationService.delete(id);
-      
+
       // Удаляем из локального состояния
       const deletedNotification = notifications.find(n => n.id === id);
       setNotifications(prev => prev.filter(n => n.id !== id));
-      
+
       // Обновляем счетчик если удалили непрочитанное
       if (deletedNotification && !deletedNotification.is_read) {
         setUnreadCount(prev => Math.max(0, prev - 1));
@@ -97,6 +97,56 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
+  };
+
+  const handleAcceptInvitation = async (notification: Notification) => {
+    try {
+      // Извлекаем participant_id из текста уведомления
+      const match = notification.text.match(/\[participant_id:(\d+)\]/);
+      const participantId = match ? parseInt(match[1]) : notification.participant_id;
+      
+      if (!participantId) {
+        console.error('Participant ID not found');
+        return;
+      }
+      
+      await notificationService.acceptInvitation(participantId);
+      await handleDeleteNotification(notification.id);
+      // Перезагружаем данные для обновления счетчика
+      await loadData();
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
+    }
+  };
+
+  const handleDeclineInvitation = async (notification: Notification) => {
+    try {
+      // Извлекаем participant_id из текста уведомления
+      const match = notification.text.match(/\[participant_id:(\d+)\]/);
+      const participantId = match ? parseInt(match[1]) : notification.participant_id;
+      
+      if (!participantId) {
+        console.error('Participant ID not found');
+        return;
+      }
+      
+      await notificationService.declineInvitation(participantId);
+      await handleDeleteNotification(notification.id);
+      // Перезагружаем данные для обновления счетчика
+      await loadData();
+    } catch (error) {
+      console.error('Error declining invitation:', error);
+    }
+  };
+
+  // Проверка является ли уведомление приглашением
+  const isInvitation = (notification: Notification) => {
+    return notification.title.includes('Приглашение на событие');
+  };
+
+  // Извлечение чистого текста уведомления (без participant_id)
+  const getCleanText = (text: string) => {
+    return text.replace(/\s*\[participant_id:\d+\]\s*$/, '');
   };
 
   const formatTime = (dateString: string) => {
@@ -203,17 +253,35 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
                         <TrashIcon className="h-4 w-4" />
                       </button>
                     </div>
-                    
+
                     <p className="mt-1 text-sm text-gray-600">
-                      {notification.text}
+                      {getCleanText(notification.text)}
                     </p>
-                    
+
+                    {/* Кнопки для приглашений */}
+                    {isInvitation(notification) && !notification.is_read && (
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleAcceptInvitation(notification)}
+                          className="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 transition-colors"
+                        >
+                          Принять
+                        </button>
+                        <button
+                          onClick={() => handleDeclineInvitation(notification)}
+                          className="flex-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300 transition-colors"
+                        >
+                          Отклонить
+                        </button>
+                      </div>
+                    )}
+
                     <div className="mt-2 flex items-center justify-between">
                       <span className="text-xs text-gray-500">
                         {formatTime(notification.created_at)}
                       </span>
-                      
-                      {!notification.is_read && (
+
+                      {!notification.is_read && !isInvitation(notification) && (
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}
                           className="text-xs text-blue-600 hover:text-blue-800"

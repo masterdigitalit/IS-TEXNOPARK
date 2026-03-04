@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/services/api-client';
-import { 
+import { useAuth } from '@/contexts/AuthContext';
+import {
   PlusIcon,
   CalendarIcon,
   ClockIcon,
@@ -19,7 +20,8 @@ import {
   ChevronRightIcon,
   ChartBarIcon,
   VideoCameraIcon,
-  MapPinIcon
+  MapPinIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 // Типы данных
@@ -67,7 +69,8 @@ interface EventFilters {
 
 export const EventList: React.FC = () => {
   const navigate = useNavigate();
-  
+  const { user } = useAuth();
+
   // Состояния
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +81,7 @@ export const EventList: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<EventFilters>({});
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const pageSize = 15;
 
   // Загрузка событий
@@ -208,15 +212,50 @@ export const EventList: React.FC = () => {
 
   // Навигация
   const navigateToEventDetails = (eventId: number) => {
-    navigate(`/admin/events/${eventId}`);
+    navigate(`/user/events/${eventId}`);
   };
 
-  const navigateToCreateEvent = () => {
-    navigate('/admin/events/create');
-  };
+  // Создание события
+  const [creating, setCreating] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    name: '',
+    description: '',
+    closes_at: '',
+    is_active: true,
+    is_open: true,
+  });
 
-  const navigateToEventEdit = (eventId: number) => {
-    navigate(`/admin/events/${eventId}/edit`);
+  const handleCreateEvent = async () => {
+    if (!eventForm.name.trim()) {
+      setError('Введите название события');
+      return;
+    }
+
+    setCreating(true);
+    setError('');
+
+    try {
+      const formData: any = {
+        name: eventForm.name,
+        description: eventForm.description || '',
+        is_active: eventForm.is_active,
+        is_open: eventForm.is_open,
+      };
+
+      if (eventForm.closes_at) {
+        formData.closes_at = eventForm.closes_at;
+      }
+
+      await apiClient.post('/api/v1/events/', formData);
+      setShowCreateModal(false);
+      setEventForm({ name: '', description: '', closes_at: '', is_active: true, is_open: true });
+      loadEvents(1);
+    } catch (err: any) {
+      console.error('Ошибка создания события:', err);
+      setError(err.message || 'Не удалось создать событие');
+    } finally {
+      setCreating(false);
+    }
   };
 
   // Форматирование
@@ -282,7 +321,7 @@ export const EventList: React.FC = () => {
             Обновить
           </button>
           <button
-            onClick={navigateToCreateEvent}
+            onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <PlusIcon className="h-5 w-5 mr-2" />
@@ -560,6 +599,15 @@ export const EventList: React.FC = () => {
                   
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                      {/* Статистика */}
+                      <button
+                        onClick={() => navigate(`/events/${event.id}/statistics`)}
+                        className="text-purple-600 hover:text-purple-900 p-1"
+                        title="Статистика и аналитика"
+                      >
+                        <ChartBarIcon className="h-5 w-5" />
+                      </button>
+
                       {/* Просмотр */}
                       <button
                         onClick={() => navigateToEventDetails(event.id)}
@@ -568,16 +616,22 @@ export const EventList: React.FC = () => {
                       >
                         <EyeIcon className="h-5 w-5" />
                       </button>
-                      
-                      {/* Редактирование */}
-                      <button
-                        onClick={() => navigateToEventEdit(event.id)}
-                        className="text-green-600 hover:text-green-900 p-1"
-                        title="Редактировать"
-                      >
-                        <PencilIcon className="h-5 w-5" />
-                      </button>
-                      
+
+                      {/* Редактирование - только для организатора */}
+                      {(() => {
+                        const isOwner = event.owner.id === user?.id;
+                        console.log(`Event ${event.id}: owner=${event.owner.id}, user=${user?.id}, isOwner=${isOwner}`);
+                        return isOwner ? (
+                          <button
+                            onClick={() => navigate(`/admin/events/${event.id}/manage`)}
+                            className="text-green-600 hover:text-green-900 p-1"
+                            title="Управление событием"
+                          >
+                            <PencilIcon className="h-5 w-5" />
+                          </button>
+                        ) : null;
+                      })()}
+
                       {/* Изменение статуса */}
                       {event.status !== 'published' ? (
                         <button
@@ -678,13 +732,116 @@ export const EventList: React.FC = () => {
             </button>
           ) : (
             <button
-              onClick={navigateToCreateEvent}
+              onClick={() => setShowCreateModal(true)}
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               <PlusIcon className="h-5 w-5 mr-2" />
               Создать первое событие
             </button>
           )}
+        </div>
+      )}
+
+      {/* Модальное окно создания события */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="text-xl font-semibold">Создание события</h3>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Название события *
+                </label>
+                <input
+                  type="text"
+                  value={eventForm.name}
+                  onChange={(e) => setEventForm({...eventForm, name: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Например: Научная конференция 2025"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Описание
+                </label>
+                <textarea
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  placeholder="Описание события..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Дата окончания регистрации
+                </label>
+                <input
+                  type="datetime-local"
+                  value={eventForm.closes_at}
+                  onChange={(e) => setEventForm({...eventForm, closes_at: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={eventForm.is_active}
+                    onChange={(e) => setEventForm({...eventForm, is_active: e.target.checked})}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Активно</span>
+                </label>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={eventForm.is_open}
+                    onChange={(e) => setEventForm({...eventForm, is_open: e.target.checked})}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">Открыто для регистрации</span>
+                </label>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">{error}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 p-6 border-t bg-gray-50 rounded-b-2xl">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-medium"
+                disabled={creating}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleCreateEvent}
+                disabled={creating || !eventForm.name.trim()}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creating ? 'Создание...' : 'Создать'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -10,6 +10,9 @@ export interface Notification {
   created_at_formatted: string;
   read_at: string | null;
   read_at_formatted: string | null;
+  // Дополнительные данные для уведомлений-приглашений
+  participant_id?: number;
+  event_id?: number;
 }
 
 // Интерфейс для пагинированного ответа Django REST Framework
@@ -97,6 +100,26 @@ class NotificationService {
       return await apiClient.delete(`/api/v1/user/notifications/${notificationId}/`);
     } catch (error) {
       console.error('Error deleting notification:', error);
+      throw error;
+    }
+  }
+
+  // Подтвердить участие в событии (для уведомлений-приглашений)
+  async acceptInvitation(participantId: number): Promise<any> {
+    try {
+      return await apiClient.post(`/api/v1/events/participants/${participantId}/accept/`, {});
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
+      throw error;
+    }
+  }
+
+  // Отклонить приглашение
+  async declineInvitation(participantId: number): Promise<any> {
+    try {
+      return await apiClient.post(`/api/v1/events/participants/${participantId}/decline/`, {});
+    } catch (error) {
+      console.error('Error declining invitation:', error);
       throw error;
     }
   }

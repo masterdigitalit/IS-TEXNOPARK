@@ -7,8 +7,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Exists, OuterRef
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from notifications.models import Notification
 from .models import (
-    Event, EventParticipant, OnlineEventInfo, 
+    Event, EventParticipant, OnlineEventInfo,
     SessionAttendance, SessionMaterial, OfflineSessionsInfo
 )
 from .serializers import (
@@ -432,7 +433,7 @@ class EventParticipantViewSet(viewsets.ModelViewSet):
     filterset_fields = ['event', 'user', 'role', 'is_confirmed']
     ordering_fields = ['registered_at']
     ordering = ['-registered_at']
-    
+
     def get_permissions(self):
         """Определяем permissions в зависимости от действия"""
         if self.action in ['create']:
@@ -442,12 +443,17 @@ class EventParticipantViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
-    
+
     def get_queryset(self):
         """Возвращаем queryset в зависимости от пользователя"""
         queryset = super().get_queryset()
         user = self.request.user
-        
+
+        # Получаем event_id из URL параметра для фильтрации
+        event_id = self.kwargs.get('event_id')
+        if event_id:
+            queryset = queryset.filter(event_id=event_id)
+
         if user.is_authenticated:
             if user.is_staff or user.is_superuser:
                 return queryset
@@ -457,6 +463,74 @@ class EventParticipantViewSet(viewsets.ModelViewSet):
                 Q(user=user)
             )
         return queryset.none()
+
+    def perform_create(self, serializer):
+        """Создание участника и отправка уведомления"""
+        participant = serializer.save()
+
+        # Создаем уведомление для пользователя
+        Notification.objects.create(
+            user=participant.user,
+            title=f'Приглашение на событие: {participant.event.name}',
+            text=f'Организатор добавил вас в качестве {participant.get_role_display()} на событие "{participant.event.name}". Подтвердите свое участие.',
+        )
+
+        # Сохраняем participant_id в тексте чтобы можно было извлечь
+        notification = Notification.objects.filter(
+            user=participant.user,
+            title__icontains=participant.event.name
+        ).order_by('-created_at').first()
+
+        if notification:
+            # Добавляем participant_id в конец текста
+            notification.text = f'{notification.text} [participant_id:{participant.id}]'
+            notification.save()
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        """Подтвердить участие в событии"""
+        participant = self.get_object()
+        
+        # Проверяем что пользователь это тот кто был приглашен
+        if participant.user != request.user:
+            return Response(
+                {'detail': 'Вы не можете подтвердить это приглашение'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        participant.is_confirmed = True
+        participant.save()
+        
+        # Удаляем уведомление или помечаем как прочитанное
+        Notification.objects.filter(
+            user=request.user,
+            title__icontains=participant.event.name
+        ).update(is_read=True)
+        
+        return Response({'detail': 'Вы подтвердили участие в событии'})
+
+    @action(detail=True, methods=['post'])
+    def decline(self, request, pk=None):
+        """Отклонить приглашение"""
+        participant = self.get_object()
+        
+        # Проверяем что пользователь это тот кто был приглашен
+        if participant.user != request.user:
+            return Response(
+                {'detail': 'Вы не можете отклонить это приглашение'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Помечаем уведомление как прочитанное
+        Notification.objects.filter(
+            user=request.user,
+            title__icontains=participant.event.name
+        ).update(is_read=True)
+        
+        # Удаляем участника
+        participant.delete()
+        
+        return Response({'detail': 'Вы отклонили приглашение'})
 
 
 class OnlineEventInfoViewSet(viewsets.ModelViewSet):
@@ -766,7 +840,12 @@ class OfflineSessionsInfoViewSet(viewsets.ModelViewSet):
         """Возвращаем queryset в зависимости от пользователя"""
         queryset = super().get_queryset()
         user = self.request.user
-        
+
+        # Получаем event_id из query параметров для фильтрации
+        event_id = self.request.query_params.get('event')
+        if event_id:
+            queryset = queryset.filter(event_id=event_id)
+
         if user.is_authenticated:
             if user.is_staff or user.is_superuser:
                 return queryset
@@ -777,7 +856,7 @@ class OfflineSessionsInfoViewSet(viewsets.ModelViewSet):
             )
         # Неаутентифицированные пользователи видят только сессии опубликованных событий
         return queryset.filter(event__status='published', event__is_active=True, is_active=True)
-    
+
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
         """Предстоящие оффлайн-сессии (БЕЗ ПАГИНАЦИИ)"""

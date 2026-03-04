@@ -20,7 +20,7 @@ const AdminDashboard = () => {
 
   const quickActions = [
     { title: 'Управление пользователями', icon: <UserGroupIcon className="h-8 w-8" />, link: '/admin/users' },
-    { title: 'Конференции', icon: <AcademicCapIcon className="h-8 w-8" />, link: '/admin/conferences' },
+    { title: 'Конференции', icon: <AcademicCapIcon className="h-8 w-8" />, link: '/admin/events' },
     { title: 'Настройки системы', icon: <CogIcon className="h-8 w-8" />, link: '/admin/settings' },
     { title: 'Отчеты и аналитика', icon: <ChartBarIcon className="h-8 w-8" />, link: '/admin/reports' },
   ];

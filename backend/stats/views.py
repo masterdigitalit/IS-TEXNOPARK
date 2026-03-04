@@ -149,18 +149,30 @@ def get_event_leaderboard(request, event_id):
         .annotate(avg_score=Avg('score'))
         .order_by('-avg_score')
     )
-    
-    # Формируем ответ
+
+    # Формируем ответ с правильными позициями (без пропусков)
     leaderboard = []
+    display_position = 1
+    previous_score = None
+    
     for idx, item in enumerate(leaderboard_data, start=1):
         participant_name = f"{item['participant__user__middle_name'] or ''} {item['participant__user__first_name'] or ''} {item['participant__user__last_name'] or ''}".strip()
+        avg_score = float(item['avg_score']) if item['avg_score'] else 0.0
+        
+        # Если оценка отличается от предыдущей, позиция = индекс
+        # Если оценка такая же, оставляем предыдущую позицию
+        if previous_score is None or avg_score != previous_score:
+            display_position = idx
+        
         leaderboard.append({
-            'position': idx,
+            'position': display_position,
             'participant_id': item['participant__id'],
             'participant_name': participant_name,
-            'average_score': float(item['avg_score']) if item['avg_score'] else 0.0
+            'average_score': avg_score
         })
-    
+        
+        previous_score = avg_score
+
     return Response(leaderboard, status=status.HTTP_200_OK)
 
 

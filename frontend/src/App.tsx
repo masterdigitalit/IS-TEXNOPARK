@@ -16,6 +16,11 @@ import { UserProfilePage } from "./components/admin/users/id/UserEditPage";
 import { EventList } from "./components/admin/events/EventList";
 import {EventListPublic} from './components/student/events/EventList'
 import { EventDetails } from "./components/student/events/ShowEvent";
+import EventManagePage from './components/admin/events/EventManagePage';
+import { EventStatisticsPage } from './components/stats';
+import { ParticipantStatisticsPage } from './components/stats';
+import ReportsPage from './components/admin/reports/ReportsPage';
+import { Navigate } from 'react-router-dom';
 // import TeacherDashboard from './components/dashboards/TeacherDashboard';
 // import RefereeDashboard from './components/dashboards/RefereeDashboard';
 
@@ -66,7 +71,24 @@ function App() {
 								</ProtectedRoute>
 							}
 						/>
-            	<Route
+						{/* Редирект для отчетов и аналитики */}
+						<Route
+							path="/events"
+							element={
+								<ProtectedRoute requiredRole="admin">
+									<Navigate to="/admin/reports" replace />
+								</ProtectedRoute>
+							}
+						/>
+						<Route
+							path="/admin/reports"
+							element={
+								<ProtectedRoute requiredRole="admin">
+									<ReportsPage />
+								</ProtectedRoute>
+							}
+						/>
+						<Route
 							path="/admin/events"
 							element={
 								<ProtectedRoute requiredRole="admin">
@@ -74,7 +96,7 @@ function App() {
 								</ProtectedRoute>
 							}
 						/>
-            
+
 						<Route
 							path="/admin/users"
 							element={
@@ -88,6 +110,15 @@ function App() {
 							element={
 								<ProtectedRoute requiredRole="admin">
 									<UserProfilePage />
+								</ProtectedRoute>
+							}
+						/>
+
+						<Route
+							path="/admin/events/:eventId/manage"
+							element={
+								<ProtectedRoute>
+									<EventManagePage />
 								</ProtectedRoute>
 							}
 						/>
@@ -109,7 +140,7 @@ function App() {
 								</ProtectedRoute>
 							}
 						/>
-									<Route
+						<Route
 							path="/user/events"
 							element={
 								<ProtectedRoute requiredRole="user">
@@ -117,17 +148,32 @@ function App() {
 								</ProtectedRoute>
 							}
 						/>
-											<Route
+						<Route
 							path="/user/events/:id"
 							element={
-								<ProtectedRoute requiredRole="user">
+								<ProtectedRoute>
 									<EventDetails />
 								</ProtectedRoute>
 							}
 						/>
-						
 
-					
+						{/* Статистика событий */}
+						<Route
+							path="/events/:eventId/statistics"
+							element={
+								<ProtectedRoute>
+									<EventStatisticsPage />
+								</ProtectedRoute>
+							}
+						/>
+						<Route
+							path="/events/:eventId/participant/:participantId/statistics"
+							element={
+								<ProtectedRoute>
+									<ParticipantStatisticsPage />
+								</ProtectedRoute>
+							}
+						/>
 
 						{/* 404 страница */}
 						<Route
