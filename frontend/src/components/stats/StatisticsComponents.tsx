@@ -1,6 +1,6 @@
 import React from 'react';
 import { ChartBarIcon, TrophyIcon, UsersIcon, StarIcon } from '@heroicons/react/24/outline';
-import { cn } from '@/lib/utils';
+import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 
 interface StatCardProps {
   title: string;
@@ -11,12 +11,12 @@ interface StatCardProps {
   color?: 'blue' | 'green' | 'purple' | 'orange' | 'red';
 }
 
-const colorVariants = {
-  blue: 'bg-blue-50 text-blue-600 border-blue-200',
-  green: 'bg-green-50 text-green-600 border-green-200',
-  purple: 'bg-purple-50 text-purple-600 border-purple-200',
-  orange: 'bg-orange-50 text-orange-600 border-orange-200',
-  red: 'bg-red-50 text-red-600 border-red-200',
+const gradients = {
+  blue: 'from-blue-500 to-blue-600',
+  green: 'from-emerald-500 to-emerald-600',
+  purple: 'from-violet-500 to-violet-600',
+  orange: 'from-amber-500 to-orange-500',
+  red: 'from-red-500 to-red-600',
 };
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -28,21 +28,24 @@ export const StatCard: React.FC<StatCardProps> = ({
   color = 'blue',
 }) => {
   return (
-    <div className={cn(
-      'rounded-xl border p-6 transition-all duration-300 hover:shadow-lg',
-      colorVariants[color],
-      className
-    )}>
+    <div className={`
+      bg-white rounded-2xl border-2 border-gray-100 p-6 
+      hover:shadow-elevated transition-all-lg group
+      ${className || ''}
+    `}>
       <div className="flex items-center justify-between mb-4">
-        <div className={cn('p-2 rounded-lg bg-white/60', colorVariants[color])}>
+        <div className={`
+          p-3 rounded-xl bg-gradient-to-br ${gradients[color]} text-white 
+          shadow-lg group-hover:scale-110 transition-all-sm
+        `}>
           {icon}
         </div>
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium opacity-80">{title}</p>
-        <p className="text-3xl font-bold">{value}</p>
+        <p className="text-sm font-medium text-gray-500">{title}</p>
+        <p className="text-3xl font-bold text-gray-900">{value}</p>
         {description && (
-          <p className="text-xs opacity-60">{description}</p>
+          <p className="text-xs text-gray-400">{description}</p>
         )}
       </div>
     </div>
@@ -64,24 +67,34 @@ export const GradeDistribution: React.FC<GradeDistributionProps> = ({
 }) => {
   const maxCount = Math.max(...grades.map((g) => g.count), 1);
 
+  const gradeColors = {
+    5: 'from-emerald-500 to-emerald-600',
+    4: 'from-blue-500 to-blue-600',
+    3: 'from-amber-500 to-amber-600',
+    2: 'from-orange-500 to-orange-600',
+    1: 'from-red-500 to-red-600',
+  };
+
   return (
-    <div className="bg-white rounded-xl border p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      <div className="space-y-3">
+    <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-soft p-6">
+      <div className="flex items-center gap-2 mb-6">
+        <StarIcon className="h-5 w-5 text-blue-600" />
+        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+      </div>
+      <div className="space-y-4">
         {grades.map((item) => (
-          <div key={item.grade} className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-700 w-8">
-              {item.grade}
-            </span>
-            <div className="flex-1 h-8 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500"
-                style={{ width: `${(item.count / maxCount) * 100}%` }}
-              />
+          <div key={item.grade} className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center border border-gray-200">
+              <span className="text-lg font-bold text-gray-900">{item.grade}</span>
             </div>
-            <span className="text-sm text-gray-600 w-12 text-right">
-              {item.count}
-            </span>
+            <div className="flex-1 h-12 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full bg-gradient-to-r ${gradeColors[item.grade as keyof typeof gradeColors]} rounded-full transition-all-lg duration-500 flex items-center justify-end pr-4`}
+                style={{ width: `${(item.count / maxCount) * 100}%` }}
+              >
+                <span className="text-white text-sm font-bold">{item.count}</span>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -103,53 +116,53 @@ interface RatingCardProps {
 export const RatingCard: React.FC<RatingCardProps> = ({ rating, className }) => {
   const getScoreColor = (score: number, system: string) => {
     if (system === 'pass_fail') {
-      return score === 1 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50';
+      return score === 1 ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600';
     }
-    if (score >= 4) return 'text-green-600 bg-green-50';
-    if (score >= 3) return 'text-yellow-600 bg-yellow-50';
-    return 'text-red-600 bg-red-50';
+    if (score >= 4) return 'from-emerald-500 to-emerald-600';
+    if (score >= 3) return 'from-amber-500 to-amber-600';
+    return 'from-red-500 to-red-600';
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
       day: 'numeric',
-      month: 'long',
+      month: 'short',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     });
   };
 
   return (
-    <div className={cn(
-      'bg-white rounded-lg border p-4 transition-all duration-200 hover:shadow-md',
-      className
-    )}>
-      <div className="flex items-start justify-between mb-2">
+    <div className={`
+      bg-gradient-subtle rounded-xl border border-gray-100 p-5 
+      hover:border-blue-200 transition-all-sm
+      ${className || ''}
+    `}>
+      <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-            <span className="text-sm font-semibold text-blue-600">
+          <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center shadow-lg">
+            <span className="text-lg font-bold text-white">
               {rating.referee_name.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
-            <p className="font-medium text-gray-900">{rating.referee_name}</p>
+            <p className="font-semibold text-gray-900">{rating.referee_name}</p>
             <p className="text-xs text-gray-500">{formatDate(rating.created_at)}</p>
           </div>
         </div>
-        <div className={cn(
-          'px-3 py-1 rounded-full text-sm font-semibold',
-          getScoreColor(rating.score, rating.grading_system)
-        )}>
+        <div className={`
+          px-4 py-2 rounded-xl text-sm font-bold text-white
+          bg-gradient-to-r ${getScoreColor(rating.score, rating.grading_system)}
+          shadow-lg
+        `}>
           {rating.grading_system === 'pass_fail'
             ? (rating.score === 1 ? 'Зачет' : 'Незачет')
             : `${rating.score} из 5`}
         </div>
       </div>
       {rating.comment && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-sm text-gray-700">{rating.comment}</p>
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <p className="text-sm text-gray-700 bg-white/60 rounded-lg p-3">{rating.comment}</p>
         </div>
       )}
     </div>
@@ -167,31 +180,43 @@ interface LeaderboardRowProps {
 
 export const LeaderboardRow: React.FC<LeaderboardRowProps> = ({ entry, className }) => {
   const getPositionStyle = (position: number) => {
-    if (position === 1) return 'bg-yellow-100 text-yellow-800';
-    if (position === 2) return 'bg-gray-100 text-gray-800';
-    if (position === 3) return 'bg-orange-100 text-orange-800';
-    return 'bg-gray-50 text-gray-600';
+    switch (position) {
+      case 1: return 'from-yellow-400 to-yellow-500 shadow-yellow-500/50';
+      case 2: return 'from-gray-400 to-gray-500 shadow-gray-500/50';
+      case 3: return 'from-amber-600 to-amber-700 shadow-amber-500/50';
+      default: return 'from-blue-500 to-blue-600 shadow-blue-500/50';
+    }
+  };
+
+  const getScoreColor = (score: number) => {
+    if (score >= 4.5) return 'text-emerald-600';
+    if (score >= 3.5) return 'text-blue-600';
+    if (score >= 2.5) return 'text-amber-600';
+    return 'text-red-600';
   };
 
   return (
-    <div className={cn(
-      'flex items-center gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors',
-      className
-    )}>
-      <div className={cn(
-        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold',
-        getPositionStyle(entry.position)
-      )}>
+    <div className={`
+      flex items-center gap-4 p-5 hover:bg-blue-50 transition-all-sm
+      ${className || ''}
+    `}>
+      <div className={`
+        w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold text-white shadow-lg
+        bg-gradient-to-br ${getPositionStyle(entry.position)}
+        ${entry.position <= 3 ? 'scale-110' : ''}
+      `}>
         {entry.position}
       </div>
       <div className="flex-1">
-        <p className="font-medium text-gray-900">{entry.participant_name}</p>
+        <p className="font-semibold text-gray-900">{entry.participant_name}</p>
       </div>
-      <div className="flex items-center gap-2">
-        <StarIcon className="h-5 w-5 text-yellow-500" />
-        <span className="text-lg font-semibold text-gray-900">
-          {entry.average_score.toFixed(2)}
-        </span>
+      <div className="text-right">
+        <div className="flex items-center gap-2">
+          <StarSolidIcon className="h-5 w-5 text-amber-400" />
+          <span className={`text-2xl font-bold ${getScoreColor(entry.average_score)}`}>
+            {entry.average_score.toFixed(2)}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -211,43 +236,47 @@ interface ParticipantCardProps {
 
 export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant, className }) => {
   return (
-    <div className={cn(
-      'bg-white rounded-xl border p-6 transition-all duration-200 hover:shadow-md',
-      className
-    )}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <span className="text-lg font-bold text-white">
+    <div className={`
+      bg-white rounded-2xl border-2 border-gray-100 shadow-soft p-6
+      transition-all-lg hover:shadow-elevated
+      ${className || ''}
+    `}>
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 rounded-2xl gradient-primary flex items-center justify-center shadow-xl">
+            <span className="text-2xl font-bold text-white">
               {participant.participant_name.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{participant.participant_name}</h3>
+            <h3 className="text-xl font-bold text-gray-900">{participant.participant_name}</h3>
             <p className="text-sm text-gray-500">{participant.participant_email}</p>
           </div>
         </div>
         {participant.final_score && (
           <div className="text-right">
-            <p className="text-2xl font-bold text-blue-600">{participant.final_score}</p>
-            <p className="text-xs text-gray-500">итоговый балл</p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
+              <StarSolidIcon className="h-5 w-5 text-blue-600" />
+              <p className="text-2xl font-bold text-blue-600">{participant.final_score}</p>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">итоговый балл</p>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         {participant.average_score && (
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500 mb-1">Средний балл</p>
-            <p className="text-lg font-semibold text-gray-900">
+          <div className="bg-gradient-subtle rounded-xl p-4 border border-gray-100">
+            <p className="text-xs text-gray-500 mb-2 font-medium">Средний балл</p>
+            <p className="text-2xl font-bold text-gray-900">
               {participant.average_score.toFixed(2)}
             </p>
           </div>
         )}
         {participant.most_popular_grades && (
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500 mb-1">Популярные оценки</p>
-            <p className="text-lg font-semibold text-gray-900">
+          <div className="bg-gradient-subtle rounded-xl p-4 border border-gray-100">
+            <p className="text-xs text-gray-500 mb-2 font-medium">Популярные оценки</p>
+            <p className="text-lg font-bold text-gray-900">
               {participant.most_popular_grades}
             </p>
           </div>
@@ -255,13 +284,13 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant, c
       </div>
 
       {Object.keys(participant.session_scores_count).length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <p className="text-xs text-gray-500 mb-2">Оценок по сессиям</p>
+        <div className="mt-6 pt-6 border-t border-gray-100">
+          <p className="text-xs text-gray-500 mb-3 font-medium">Оценок по сессиям</p>
           <div className="flex flex-wrap gap-2">
             {Object.entries(participant.session_scores_count).map(([session, count]) => (
               <span
                 key={session}
-                className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md"
+                className="px-3 py-2 bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl border border-blue-100"
               >
                 {session.replace(/_/g, ' ')}: {count}
               </span>

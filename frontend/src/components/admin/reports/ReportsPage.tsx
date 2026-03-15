@@ -13,6 +13,8 @@ import {
   TrophyIcon,
   StarIcon,
   UsersIcon,
+  ArrowTrendingUpIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline';
 import { handleApiError } from '@/utils/error-handler';
 
@@ -105,62 +107,76 @@ const ReportsPage: React.FC = () => {
 
   const getStatusColor = (status: Event['status']) => {
     switch (status) {
-      case 'published': return 'bg-green-100 text-green-800 border-green-200';
-      case 'draft': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200';
-      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'published': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'draft': return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'cancelled': return 'bg-red-100 text-red-700 border-red-200';
+      case 'completed': return 'bg-blue-100 text-blue-700 border-blue-200';
+      default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
 
+  const totalParticipants = events.reduce((sum, e) => sum + e.participants_count, 0);
+  const activeEvents = events.filter(e => e.is_active && e.status === 'published').length;
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-subtle dark:from-slate-950 dark:to-slate-900 transition-theme">
       {/* Header */}
-      <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 text-white">
-        <div className="container mx-auto px-4 py-12">
+      <div className="gradient-primary text-white relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
+            backgroundSize: '32px 32px'
+          }} />
+        </div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-300/10 rounded-full blur-3xl" />
+        
+        <div className="container mx-auto px-4 py-16 relative z-10">
           <div className="max-w-7xl mx-auto">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <ChartBarIcon className="h-10 w-10" />
+            <div className="flex items-center gap-5 mb-8">
+              <div className="p-4 bg-white/20 rounded-2xl backdrop-blur-md shadow-xl">
+                <ChartBarIcon className="h-12 w-12" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold">Отчеты и аналитика</h1>
-                <p className="text-purple-100 mt-1 text-lg">
+                <h1 className="text-4xl font-bold tracking-tight">Отчеты и аналитика</h1>
+                <p className="text-blue-100 mt-2 text-lg">
                   Просмотр статистики и результатов событий
                 </p>
               </div>
             </div>
 
             {/* Stats Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20 shadow-lg hover:bg-white/15 transition-all-lg">
                 <div className="flex items-center gap-3">
-                  <TrophyIcon className="h-6 w-6 text-yellow-300" />
+                  <div className="p-2.5 bg-yellow-400/20 rounded-xl">
+                    <TrophyIcon className="h-7 w-7 text-yellow-300" />
+                  </div>
                   <div>
-                    <p className="text-purple-100 text-sm">Всего событий</p>
-                    <p className="text-2xl font-bold">{events.length}</p>
+                    <p className="text-blue-100 text-sm font-medium">Всего событий</p>
+                    <p className="text-3xl font-bold">{events.length}</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20 shadow-lg hover:bg-white/15 transition-all-lg">
                 <div className="flex items-center gap-3">
-                  <UsersIcon className="h-6 w-6 text-green-300" />
+                  <div className="p-2.5 bg-emerald-400/20 rounded-xl">
+                    <UsersIcon className="h-7 w-7 text-emerald-300" />
+                  </div>
                   <div>
-                    <p className="text-purple-100 text-sm">Участников всего</p>
-                    <p className="text-2xl font-bold">
-                      {events.reduce((sum, e) => sum + e.participants_count, 0)}
-                    </p>
+                    <p className="text-blue-100 text-sm font-medium">Участников всего</p>
+                    <p className="text-3xl font-bold">{totalParticipants.toLocaleString()}</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/20 shadow-lg hover:bg-white/15 transition-all-lg">
                 <div className="flex items-center gap-3">
-                  <StarIcon className="h-6 w-6 text-blue-300" />
+                  <div className="p-2.5 bg-blue-400/20 rounded-xl">
+                    <StarIcon className="h-7 w-7 text-blue-300" />
+                  </div>
                   <div>
-                    <p className="text-purple-100 text-sm">Активных событий</p>
-                    <p className="text-2xl font-bold">
-                      {events.filter(e => e.is_active && e.status === 'published').length}
-                    </p>
+                    <p className="text-blue-100 text-sm font-medium">Активных событий</p>
+                    <p className="text-3xl font-bold">{activeEvents}</p>
                   </div>
                 </div>
               </div>
@@ -173,22 +189,22 @@ const ReportsPage: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
           {/* Search Bar */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 mb-8 border border-gray-100 dark:border-slate-700 transition-theme">
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-6 w-6 text-gray-400" />
+              <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                <MagnifyingGlassIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Поиск событий по названию или описанию..."
-                className="block w-full pl-12 pr-4 py-4 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                className="block w-full pl-13 pr-12 py-4 text-lg border-2 border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all-sm placeholder-gray-400 dark:placeholder-gray-500"
               />
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-all-sm"
                 >
                   <ArrowPathIcon className="h-5 w-5" />
                 </button>
@@ -198,19 +214,19 @@ const ReportsPage: React.FC = () => {
 
           {/* Loading */}
           {loading && (
-            <div className="text-center py-12">
-              <ArrowPathIcon className="h-12 w-12 text-purple-600 animate-spin mx-auto mb-4" />
-              <p className="text-gray-600">Загрузка событий...</p>
+            <div className="text-center py-16 bg-white dark:bg-slate-800 rounded-2xl shadow-soft border border-gray-100 dark:border-slate-700 transition-theme">
+              <ArrowPathIcon className="h-14 w-14 text-blue-600 animate-spin mx-auto mb-4" />
+              <p className="text-gray-600 dark:text-gray-400 text-lg">Загрузка событий...</p>
             </div>
           )}
 
           {/* Error */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
-              <p className="text-red-800 font-medium">{error}</p>
+            <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-2xl p-6 mb-8 transition-theme">
+              <p className="text-red-800 dark:text-red-300 font-medium">{error}</p>
               <button
                 onClick={loadEvents}
-                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                className="mt-3 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline font-medium"
               >
                 Попробовать снова
               </button>
@@ -223,40 +239,40 @@ const ReportsPage: React.FC = () => {
               {filteredEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow duration-300"
+                  className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-elevated transition-all-lg group"
                 >
                   {/* Card Header */}
-                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-6 border-b border-gray-200">
-                    <div className="flex items-start justify-between mb-3">
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 border-b border-gray-100 dark:border-slate-700">
+                    <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">
+                        <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-700 transition-all-sm">
                           {event.name}
                         </h3>
                         <p className="text-sm text-gray-600 line-clamp-2">
                           {event.description || 'Без описания'}
                         </p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(event.status)}`}>
+                      <span className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border ${getStatusColor(event.status)}`}>
                         {event.status_display}
                       </span>
                     </div>
 
                     {/* Badges */}
-                    <div className="flex flex-wrap gap-2 mt-3">
+                    <div className="flex flex-wrap gap-2">
                       {event.has_online_sessions && (
-                        <span className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800">
-                          <VideoCameraIcon className="h-3 w-3 mr-1" />
+                        <span className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
+                          <VideoCameraIcon className="h-3.5 w-3.5 mr-1.5" />
                           Онлайн-сессии
                         </span>
                       )}
                       {event.has_offline_sessions && (
-                        <span className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-                          <MapPinIcon className="h-3 w-3 mr-1" />
+                        <span className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700">
+                          <MapPinIcon className="h-3.5 w-3.5 mr-1.5" />
                           Офлайн-сессии
                         </span>
                       )}
                       {!event.is_active && (
-                        <span className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                        <span className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
                           Неактивно
                         </span>
                       )}
@@ -267,48 +283,48 @@ const ReportsPage: React.FC = () => {
                   <div className="p-6">
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
+                        <div className="p-2.5 bg-blue-100 rounded-xl">
                           <CalendarIcon className="h-5 w-5 text-blue-600" />
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Создано</p>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-xs text-gray-500 font-medium">Создано</p>
+                          <p className="text-sm font-semibold text-gray-900">
                             {formatDate(event.created_at)}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-100 rounded-lg">
-                          <UserIcon className="h-5 w-5 text-green-600" />
+                        <div className="p-2.5 bg-emerald-100 rounded-xl">
+                          <UserIcon className="h-5 w-5 text-emerald-600" />
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Организатор</p>
-                          <p className="text-sm font-medium text-gray-900 truncate max-w-[150px]">
+                          <p className="text-xs text-gray-500 font-medium">Организатор</p>
+                          <p className="text-sm font-semibold text-gray-900 truncate max-w-[140px]">
                             {event.owner.full_name || event.owner.username}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-purple-100 rounded-lg">
+                        <div className="p-2.5 bg-purple-100 rounded-xl">
                           <UsersIcon className="h-5 w-5 text-purple-600" />
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Участников</p>
-                          <p className="text-sm font-bold text-purple-600">
+                          <p className="text-xs text-gray-500 font-medium">Участников</p>
+                          <p className="text-lg font-bold text-purple-600">
                             {event.participants_count}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <div className="p-2 bg-orange-100 rounded-lg">
-                          <TrophyIcon className="h-5 w-5 text-orange-600" />
+                        <div className="p-2.5 bg-amber-100 rounded-xl">
+                          <TrophyIcon className="h-5 w-5 text-amber-600" />
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Статус</p>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-xs text-gray-500 font-medium">Статус</p>
+                          <p className="text-sm font-semibold text-gray-900">
                             {event.is_open ? 'Открыто' : 'Закрыто'}
                           </p>
                         </div>
@@ -318,10 +334,11 @@ const ReportsPage: React.FC = () => {
                     {/* Statistics Button */}
                     <button
                       onClick={() => handleViewStatistics(event.id)}
-                      className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg flex items-center justify-center gap-3"
+                      className="w-full py-4 px-6 gradient-primary hover:shadow-glow text-white font-semibold rounded-xl transition-all-lg transform hover:scale-[1.02] flex items-center justify-center gap-3"
                     >
                       <ChartBarIcon className="h-6 w-6" />
                       Посмотреть статистику
+                      <EyeIcon className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
@@ -331,15 +348,17 @@ const ReportsPage: React.FC = () => {
 
           {/* No Results */}
           {!loading && filteredEvents.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-              <ChartBarIcon className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600 text-lg mb-4">
+            <div className="text-center py-16 bg-white rounded-2xl border-2 border-gray-100">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-6">
+                <ChartBarIcon className="h-10 w-10 text-gray-400" />
+              </div>
+              <p className="text-gray-600 text-lg mb-4 font-medium">
                 {searchTerm ? 'События не найдены' : 'События пока отсутствуют'}
               </p>
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="text-purple-600 hover:text-purple-800 font-medium"
+                  className="text-blue-600 hover:text-blue-800 font-semibold transition-all-sm"
                 >
                   Сбросить поиск
                 </button>

@@ -26,22 +26,23 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <div className="p-6">
+    <div className="p-6 lg:p-8">
+      {/* Заголовок */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Административная панель</h1>
-        <p className="text-gray-600 mt-2">Управление системой и всеми пользователями</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Административная панель</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-2">Управление системой и всеми пользователями</p>
       </div>
 
       {/* Статистика */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {stats.map((stat, index) => (
-          <div key={index} className="bg-white rounded-xl shadow p-6">
+          <div key={index} className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 border border-gray-100 dark:border-slate-700 hover:shadow-elevated transition-all-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-                <p className="text-2xl font-bold mt-2">{stat.value}</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</p>
+                <p className="text-3xl font-bold mt-2 text-gray-900 dark:text-white">{stat.value}</p>
               </div>
-              <div className={`${stat.color} p-3 rounded-full`}>
+              <div className={`${stat.color} p-4 rounded-2xl shadow-lg`}>
                 <div className="text-white">{stat.icon}</div>
               </div>
             </div>
@@ -50,55 +51,55 @@ const AdminDashboard = () => {
       </div>
 
       {/* Быстрые действия */}
-      <div className="bg-white rounded-xl shadow p-6 mb-8">
-        <h2 className="text-xl font-bold mb-6">Быстрые действия</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 mb-8 border border-gray-100 dark:border-slate-700">
+        <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Быстрые действия</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {quickActions.map((action, index) => (
             <Link
               key={index}
               to={action.link}
-              className="flex flex-col items-center justify-center p-6 border-2 border-gray-100 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200"
+              className="flex flex-col items-center justify-center p-6 border-2 border-gray-100 dark:border-slate-700 rounded-2xl hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all-lg group"
             >
-              <div className="text-blue-600 mb-3">{action.icon}</div>
-              <span className="text-center font-medium">{action.title}</span>
+              <div className="text-blue-600 dark:text-blue-400 mb-3 group-hover:scale-110 transition-all-sm">{action.icon}</div>
+              <span className="text-center font-medium text-gray-700 dark:text-gray-300 group-hover:text-blue-700 dark:group-hover:text-blue-300">{action.title}</span>
             </Link>
           ))}
         </div>
       </div>
 
       {/* Последние активности */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-xl font-bold mb-6">Последние действия</h2>
-          <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 border border-gray-100 dark:border-slate-700">
+          <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Последние действия</h2>
+          <div className="space-y-3">
             {['Новый пользователь зарегистрирован', 'Создана конференция "Наука 2025"', 'Обновлены настройки системы', 'Добавлен новый судья'].map((action, index) => (
-              <div key={index} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                <span>{action}</span>
-                <span className="ml-auto text-sm text-gray-500">5 мин назад</span>
+              <div key={index} className="flex items-center p-4 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+                <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full mr-3 shadow-glow-green"></div>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">{action}</span>
+                <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">5 мин назад</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-xl font-bold mb-6">Статус системы</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 border border-gray-100 dark:border-slate-700">
+          <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Статус системы</h2>
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span>Сервер</span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Online</span>
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+              <span className="font-medium text-gray-700 dark:text-gray-300">Сервер</span>
+              <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm font-medium">Online</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span>База данных</span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Стабильно</span>
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+              <span className="font-medium text-gray-700 dark:text-gray-300">База данных</span>
+              <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm font-medium">Стабильно</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span>API</span>
-              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Работает</span>
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+              <span className="font-medium text-gray-700 dark:text-gray-300">API</span>
+              <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm font-medium">Работает</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span>Обновления</span>
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">Доступны</span>
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+              <span className="font-medium text-gray-700 dark:text-gray-300">Обновления</span>
+              <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-sm font-medium">Доступны</span>
             </div>
           </div>
         </div>

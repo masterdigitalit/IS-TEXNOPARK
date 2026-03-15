@@ -112,12 +112,12 @@ def calculate_event_statistics(request, event_id):
     API endpoint для ручного пересчета статистики события.
     """
     event = get_object_or_404(Event, id=event_id)
-    
+
     # Проверяем, что пользователь является владельцем события или администратором
-    if request.user != event.owner and not request.user.is_staff:
+    if request.user != event.owner and not (request.user.is_staff or request.user.is_superuser):
         from rest_framework.exceptions import PermissionDenied
         raise PermissionDenied("У вас нет прав для пересчета статистики этого события")
-    
+
     statistics = EventStatistics.calculate_for_event(event)
     serializer = EventStatisticsSerializer(statistics)
     return Response(serializer.data, status=status.HTTP_200_OK)
@@ -130,16 +130,18 @@ def get_event_leaderboard(request, event_id):
     API endpoint для получения списка участников с их средними оценками (рейтинг).
     """
     event = get_object_or_404(Event, id=event_id)
-    
+
     # Проверяем права доступа к событию
-    try:
-        participant = EventParticipant.objects.get(event=event, user=request.user)
-        if participant.role not in ['referee', 'owner'] and not request.user.is_staff:
+    # Администраторы (is_staff или is_superuser) имеют доступ всегда
+    if not (request.user.is_staff or request.user.is_superuser):
+        try:
+            participant = EventParticipant.objects.get(event=event, user=request.user)
+            if participant.role not in ['referee', 'owner']:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("У вас нет прав для просмотра рейтинга этого события")
+        except EventParticipant.DoesNotExist:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("У вас нет прав для просмотра рейтинга этого события")
-    except EventParticipant.DoesNotExist:
-        from rest_framework.exceptions import PermissionDenied
-        raise PermissionDenied("У вас нет прав для просмотра рейтинга этого события")
     
     # Получаем средние оценки для каждого участника (только для пятибалльной системы)
     leaderboard_data = (
@@ -185,14 +187,16 @@ def get_event_participant_statistics(request, event_id):
     event = get_object_or_404(Event, id=event_id)
 
     # Проверяем права доступа к событию
-    try:
-        participant = EventParticipant.objects.get(event=event, user=request.user)
-        if participant.role not in ['referee', 'owner'] and not request.user.is_staff:
+    # Администраторы (is_staff или is_superuser) имеют доступ всегда
+    if not (request.user.is_staff or request.user.is_superuser):
+        try:
+            participant = EventParticipant.objects.get(event=event, user=request.user)
+            if participant.role not in ['referee', 'owner']:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("У вас нет прав для просмотра статистики этого события")
+        except EventParticipant.DoesNotExist:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("У вас нет прав для просмотра статистики этого события")
-    except EventParticipant.DoesNotExist:
-        from rest_framework.exceptions import PermissionDenied
-        raise PermissionDenied("У вас нет прав для просмотра статистики этого события")
 
     # Получаем статистику для всех участников события
     participant_stats = EventParticipantStatistics.objects.filter(event=event)
@@ -211,14 +215,16 @@ def get_participant_final_score(request, event_id, participant_id):
     participant = get_object_or_404(EventParticipant, id=participant_id, event=event)
 
     # Проверяем права доступа к событию
-    try:
-        requester_participant = EventParticipant.objects.get(event=event, user=request.user)
-        if requester_participant.role not in ['referee', 'owner'] and not request.user.is_staff:
+    # Администраторы (is_staff или is_superuser) имеют доступ всегда
+    if not (request.user.is_staff or request.user.is_superuser):
+        try:
+            requester_participant = EventParticipant.objects.get(event=event, user=request.user)
+            if requester_participant.role not in ['referee', 'owner']:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("У вас нет прав для просмотра статистики этого события")
+        except EventParticipant.DoesNotExist:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("У вас нет прав для просмотра статистики этого события")
-    except EventParticipant.DoesNotExist:
-        from rest_framework.exceptions import PermissionDenied
-        raise PermissionDenied("У вас нет прав для просмотра статистики этого события")
 
     # Получаем или вычисляем статистику для участника
     stats, created = EventParticipantStatistics.objects.get_or_create(event=event, participant=participant)
@@ -240,14 +246,16 @@ def get_online_session_statistics(request, session_id):
     session = get_object_or_404(OnlineEventInfo, id=session_id)
 
     # Проверяем права доступа к событию
-    try:
-        participant = EventParticipant.objects.get(event=session.event, user=request.user)
-        if participant.role not in ['referee', 'owner'] and not request.user.is_staff:
+    # Администраторы (is_staff или is_superuser) имеют доступ всегда
+    if not (request.user.is_staff or request.user.is_superuser):
+        try:
+            participant = EventParticipant.objects.get(event=session.event, user=request.user)
+            if participant.role not in ['referee', 'owner']:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("У вас нет прав для просмотра статистики этой сессии")
+        except EventParticipant.DoesNotExist:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("У вас нет прав для просмотра статистики этой сессии")
-    except EventParticipant.DoesNotExist:
-        from rest_framework.exceptions import PermissionDenied
-        raise PermissionDenied("У вас нет прав для просмотра статистики этой сессии")
 
     # Получаем статистику для сессии
     stats = EventStatistics.calculate_for_session(session)
@@ -264,14 +272,16 @@ def get_offline_session_statistics(request, session_id):
     session = get_object_or_404(OfflineSessionsInfo, id=session_id)
 
     # Проверяем права доступа к событию
-    try:
-        participant = EventParticipant.objects.get(event=session.event, user=request.user)
-        if participant.role not in ['referee', 'owner'] and not request.user.is_staff:
+    # Администраторы (is_staff или is_superuser) имеют доступ всегда
+    if not (request.user.is_staff or request.user.is_superuser):
+        try:
+            participant = EventParticipant.objects.get(event=session.event, user=request.user)
+            if participant.role not in ['referee', 'owner']:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("У вас нет прав для просмотра статистики этой сессии")
+        except EventParticipant.DoesNotExist:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("У вас нет прав для просмотра статистики этой сессии")
-    except EventParticipant.DoesNotExist:
-        from rest_framework.exceptions import PermissionDenied
-        raise PermissionDenied("У вас нет прав для просмотра статистики этой сессии")
 
     # Получаем статистику для сессии
     stats = EventStatistics.calculate_for_session(session)

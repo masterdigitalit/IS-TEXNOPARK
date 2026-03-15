@@ -2,6 +2,7 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import HomePage from "./components/pages/HomePage";
 import { LoginForm } from "./components/auth/LoginForm";
 import { RegisterForm } from "./components/auth/RegisterForm";
@@ -41,11 +42,12 @@ const RefereeDashboard = () => (
 
 function App() {
 	return (
-		<Router>
-			<AuthProvider>
-				<div className="min-h-screen bg-gray-50">
-					<Navbar />
-					<Routes>
+		<ThemeProvider>
+			<Router>
+				<AuthProvider>
+					<div className="min-h-screen bg-gradient-subtle dark:from-slate-950 dark:to-slate-900 transition-theme">
+						<Navbar />
+						<Routes>
 						{/* Публичные роуты */}
 						<Route path="/" element={<HomePage />} />
 						<Route path="/login" element={<LoginForm />} />
@@ -180,8 +182,8 @@ function App() {
 							path="*"
 							element={
 								<div className="container mx-auto px-4 py-20 text-center">
-									<h1 className="text-4xl font-bold mb-4">404</h1>
-									<p className="text-gray-600 mb-8">Страница не найдена</p>
+									<h1 className="text-4xl font-bold mb-4 text-foreground">404</h1>
+									<p className="text-muted-foreground mb-8">Страница не найдена</p>
 								</div>
 							}
 						/>
@@ -189,6 +191,7 @@ function App() {
 				</div>
 			</AuthProvider>
 		</Router>
+		</ThemeProvider>
 	);
 }
 

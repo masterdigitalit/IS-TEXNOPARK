@@ -45,43 +45,43 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-subtle dark:from-slate-900 dark:to-slate-800 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full">
         {/* Логотип и заголовок */}
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl flex items-center justify-center shadow-lg">
+            <div className="w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/30 transform hover:scale-105 transition-all-lg">
               <span className="text-2xl font-bold text-white">N</span>
             </div>
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
             Добро пожаловать
           </h2>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
             Войдите в свою учетную запись
           </p>
         </div>
 
         {/* Карточка формы */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-elevated p-8 border border-gray-100 dark:border-slate-700">
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
               <div className="flex items-center">
-                <ExclamationTriangleIcon className="h-5 w-5 text-red-600 mr-3 flex-shrink-0" />
-                <p className="text-red-800 text-sm">{error}</p>
+                <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-3 flex-shrink-0" />
+                <p className="text-red-800 dark:text-red-300 text-sm font-medium">{error}</p>
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Поле email */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Email адрес
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <EnvelopeIcon className="h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <EnvelopeIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                 </div>
                 <input
                   id="email"
@@ -89,7 +89,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors placeholder-gray-400"
+                  className="block w-full pl-12 pr-4 py-3.5 border-2 border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all-sm placeholder-gray-400 dark:placeholder-gray-500"
                   placeholder="you@example.com"
                 />
               </div>
@@ -98,19 +98,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({
             {/* Поле пароля */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Пароль
                 </label>
-                <Link 
-                  to="/forgot-password" 
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-all-sm"
                 >
                   Забыли пароль?
                 </Link>
               </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <LockClosedIcon className="h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <LockClosedIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                 </div>
                 <input
                   id="password"
@@ -118,7 +118,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors placeholder-gray-400"
+                  className="block w-full pl-12 pr-12 py-3.5 border-2 border-gray-200 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all-sm placeholder-gray-400 dark:placeholder-gray-500"
                   placeholder="Введите пароль"
                 />
                 <button
@@ -127,21 +127,20 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    <EyeSlashIcon className="h-5 w-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-all-sm" />
                   ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    <EyeIcon className="h-5 w-5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-all-sm" />
                   )}
                 </button>
               </div>
             </div>
 
-       
 
             {/* Кнопка входа */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full group relative flex justify-center py-3 px-4 border border-transparent rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="w-full group relative flex justify-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-semibold text-white gradient-primary hover:shadow-glow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all-lg shadow-xl"
             >
               {isLoading ? (
                 <span className="flex items-center">
@@ -159,27 +158,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               )}
             </button>
 
-       
+
           </form>
 
           {/* Ссылка на регистрацию */}
           <div className="mt-8 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Нет учетной записи?{' '}
               <Link
                 to="/register"
-                className="font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-all-sm"
               >
                 Зарегистрироваться
               </Link>
             </p>
-            <p className="mt-4 text-xs text-gray-500">
+            <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
               Нажимая «Войти», вы соглашаетесь с нашими{' '}
-              <Link to="/terms" className="text-blue-600 hover:text-blue-800">
+              <Link to="/terms" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-all-sm">
                 Условиями
               </Link>{' '}
               и{' '}
-              <Link to="/privacy" className="text-blue-600 hover:text-blue-800">
+              <Link to="/privacy" className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-all-sm">
                 Политикой конфиденциальности
               </Link>
             </p>
@@ -188,18 +187,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
         {/* Дополнительная информация */}
         <div className="mt-8 text-center">
-          {/* <div className="flex items-center justify-center space-x-6 text-sm text-gray-500">
-            <Link to="/help" className="hover:text-gray-700 transition-colors">
-              Помощь
-            </Link>
-            <Link to="/contact" className="hover:text-gray-700 transition-colors">
-              Контакты
-            </Link>
-            <Link to="/about" className="hover:text-gray-700 transition-colors">
-              О нас
-            </Link>
-          </div> */}
-          <p className="mt-4 text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             © 2025 Navigator. Все права защищены.
           </p>
         </div>
