@@ -29,6 +29,7 @@ import {
   FolderPlusIcon,
   XMarkIcon,
   ChartBarIcon,
+  CodeBracketIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -490,38 +491,35 @@ export const EventDetails: React.FC = () => {
       setUploadError('Выберите файл для загрузки');
       return;
     }
-    
+
     setUploadLoading(true);
     setUploadError('');
-    
+
     try {
       const formData = new FormData();
       formData.append('file', fileForm.file);
       formData.append('name', fileForm.name);
-      
+
       if (fileForm.description) {
         formData.append('description', fileForm.description);
       }
-      
+
       formData.append('category', fileForm.category);
       formData.append('is_public', fileForm.is_public.toString());
-      
+
       // КЛЮЧЕВОЙ МОМЕНТ: Добавляем ID события для автоматической привязки
       formData.append('event_id', event.id.toString());
       formData.append('event_category', fileForm.category);
       formData.append('event_description', fileForm.description || '');
-      
+
       console.log('Загрузка файла с привязкой к событию:', event.id);
-      
+
       // Используем endpoint для загрузки файлов
-      const response = await apiClient.post('/api/v1/files/upload/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
+      // ВАЖНО: Не устанавливаем Content-Type вручную - браузер добавит его с boundary
+      const response = await apiClient.post('/api/v1/files/files/upload/', formData);
+
       console.log('Файл загружен и привязан:', response);
-      
+
       setUploadSuccess(true);
       setFileForm({
         name: '',
@@ -530,14 +528,12 @@ export const EventDetails: React.FC = () => {
         is_public: true,
         file: null
       });
-      
-      // Обновляем список файлов
-      setTimeout(() => {
-        loadEventFiles();
-        setUploadSuccess(false);
-        setShowUploadModal(false);
-      }, 1500);
-      
+
+      // Закрываем модальное окно и сразу обновляем список файлов
+      setShowUploadModal(false);
+      setUploadSuccess(false);
+      loadEventFiles();
+
     } catch (err: any) {
       console.error('Ошибка загрузки файла:', err);
       setUploadError(err.message || 'Не удалось загрузить файл');
@@ -566,29 +562,128 @@ export const EventDetails: React.FC = () => {
   const handleDownloadFile = async (file: DisplayFile) => {
     try {
       const response = await fetch(file.file_url);
+      
+      // Получаем MIME тип из ответа
+      const contentType = response.headers.get('content-type') || file.mime_type || 'application/octet-stream';
+      
+      // Получаем имя файла из заголовков Content-Disposition, если есть
+      const contentDisposition = response.headers.get('content-disposition');
+      let fileName = file.original_name || file.name || 'file';
+      
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*?="?([^;"]+)"?/i);
+        if (filenameMatch && filenameMatch[1]) {
+          fileName = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''));
+        }
+      }
+      
+      // Если в имени нет расширения, пробуем определить его по MIME типу
+      if (!fileName.includes('.')) {
+        const extension = getExtensionFromMimeType(contentType);
+        if (extension) {
+          fileName += '.' + extension;
+        }
+      }
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', file.original_name);
+      link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
       link.remove();
-      
+      window.URL.revokeObjectURL(url);
+
       // Обновляем счетчик загрузок (если есть такой endpoint)
       try {
         await apiClient.post(`/api/v1/files/${file.id}/download/`);
       } catch (err) {
         console.log('Не удалось обновить счетчик загрузок:', err);
       }
-      
+
     } catch (err: any) {
       console.error('Ошибка скачивания файла:', err);
       setError(err.message || 'Не удалось скачать файл');
     }
   };
 
-  const getFileIcon = (category: string) => {
+  // Вспомогательная функция для определения расширения по MIME типу
+  const getExtensionFromMimeType = (mimeType: string): string | null => {
+    const mimeToExtension: Record<string, string> = {
+      'application/pdf': 'pdf',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.ms-excel': 'xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+      'application/vnd.ms-powerpoint': 'ppt',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+      'application/zip': 'zip',
+      'application/x-rar-compressed': 'rar',
+      'application/x-7z-compressed': '7z',
+      'application/x-tar': 'tar',
+      'application/gzip': 'gz',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/bmp': 'bmp',
+      'image/svg+xml': 'svg',
+      'image/webp': 'webp',
+      'video/mp4': 'mp4',
+      'video/x-msvideo': 'avi',
+      'video/quicktime': 'mov',
+      'audio/mpeg': 'mp3',
+      'audio/wav': 'wav',
+      'audio/ogg': 'ogg',
+      'text/plain': 'txt',
+      'text/html': 'html',
+      'text/css': 'css',
+      'application/javascript': 'js',
+      'application/json': 'json',
+      'application/xml': 'xml',
+      'text/xml': 'xml',
+    };
+    
+    return mimeToExtension[mimeType] || null;
+  };
+
+  const getFileIcon = (fileName: string, category?: string) => {
+    // Определяем тип файла по расширению
+    const extension = fileName.split('.').pop()?.toLowerCase() || '';
+    
+    // Расширения для изображений
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'ico'];
+    // Расширения для документов
+    const documentExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt'];
+    // Расширения для видео
+    const videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'];
+    // Расширения для аудио
+    const audioExtensions = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'];
+    // Расширения для архивов
+    const archiveExtensions = ['zip', 'rar', '7z', 'tar', 'gz'];
+    // Расширения для кода и данных
+    const codeExtensions = ['xml', 'json', 'yaml', 'yml', 'js', 'ts', 'py', 'html', 'css'];
+
+    if (imageExtensions.includes(extension)) {
+      return <DocumentIcon className="h-8 w-8 text-purple-600" />;
+    }
+    if (documentExtensions.includes(extension)) {
+      return <DocumentTextIcon className="h-8 w-8 text-blue-600" />;
+    }
+    if (videoExtensions.includes(extension)) {
+      return <VideoCameraIcon className="h-8 w-8 text-red-600" />;
+    }
+    if (audioExtensions.includes(extension)) {
+      return <BellAlertIcon className="h-8 w-8 text-green-600" />;
+    }
+    if (archiveExtensions.includes(extension)) {
+      return <FolderIcon className="h-8 w-8 text-yellow-600" />;
+    }
+    if (codeExtensions.includes(extension)) {
+      return <CodeBracketIcon className="h-8 w-8 text-orange-600" />;
+    }
+    
+    // По умолчанию используем категорию или общую иконку
     switch (category) {
       case 'image':
         return <DocumentIcon className="h-8 w-8 text-purple-600" />;
@@ -706,10 +801,10 @@ export const EventDetails: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 md:p-6 transition-theme">
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Загрузка информации о событии...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Загрузка информации о событии...</p>
         </div>
       </div>
     );
@@ -717,19 +812,19 @@ export const EventDetails: React.FC = () => {
 
   if (error || !event) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 p-4 md:p-6 transition-theme">
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={handleBack}
-            className="inline-flex items-center text-gray-600 hover:text-gray-900"
+            className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
           >
             <ArrowLeftIcon className="h-5 w-5 mr-2" />
             Назад к событиям
           </button>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-          <ExclamationTriangleIcon className="h-12 w-12 text-red-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-red-800 mb-2">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+          <ExclamationTriangleIcon className="h-12 w-12 text-red-600 dark:text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">
             {error || 'Событие не найдено'}
           </h3>
           <button
@@ -757,29 +852,29 @@ export const EventDetails: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 transition-theme">
       {/* Хедер */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-white dark:bg-slate-800 shadow-sm border-b border-gray-200 dark:border-slate-700 transition-theme">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between py-6">
             <div className="flex-1 min-w-0">
               <div className="flex items-center">
                 <button
                   onClick={handleBack}
-                  className="inline-flex items-center text-gray-600 hover:text-gray-900 mr-4"
+                  className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mr-4"
                 >
                   <ArrowLeftIcon className="h-5 w-5 mr-2" />
                   Назад
                 </button>
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">{event.name}</h1>
-                  <p className="text-gray-600 mt-1">
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{event.name}</h1>
+                  <p className="text-gray-600 dark:text-gray-400 mt-1">
                     Организатор: {event.owner.full_name}
                   </p>
                 </div>
               </div>
             </div>
-            
+
             <div className="mt-4 md:mt-0 flex flex-wrap items-center gap-3">
               <button
                 onClick={() => navigate(`/events/${event.id}/statistics`)}
@@ -788,16 +883,16 @@ export const EventDetails: React.FC = () => {
                 <ChartBarIcon className="h-5 w-5 mr-2" />
                 Статистика
               </button>
-              
+
               {isOwner ? (
-                <div className="flex items-center bg-blue-50 text-blue-700 px-4 py-2 rounded-lg">
+                <div className="flex items-center bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-2 rounded-lg">
                   <UserIcon className="h-5 w-5 mr-2" />
                   Вы организатор
                 </div>
               ) : isParticipant ? (
                 <div className="flex items-center space-x-4">
                   <div className={`flex items-center px-4 py-2 rounded-lg ${
-                    isConfirmed ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
+                    isConfirmed ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
                   }`}>
                     <CheckCircleIcon className="h-5 w-5 mr-2" />
                     {isConfirmed ? 'Вы участвуете' : 'Ожидает подтверждения'}
@@ -821,7 +916,7 @@ export const EventDetails: React.FC = () => {
                   Принять участие
                 </button>
               ) : (
-                <div className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg">
+                <div className="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg">
                   <XCircleIcon className="h-5 w-5 mr-2" />
                   {event.is_open ? 'Регистрация закрыта' : 'Регистрация недоступна'}
                 </div>
@@ -833,94 +928,94 @@ export const EventDetails: React.FC = () => {
 
       {/* Модальное окно регистрации */}
       {showRegistrationForm && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
+        <div className="fixed inset-0 bg-gray-900 dark:bg-black bg-opacity-75 dark:bg-opacity-80 flex items-center justify-center z-50 p-4 transition-theme">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-md w-full border border-gray-200 dark:border-slate-700 transition-theme">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                 Регистрация на событие
               </h3>
-              <p className="text-sm text-gray-500 mt-1">{event.name}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{event.name}</p>
             </div>
-            
+
             <div className="px-6 py-4">
               {registrationSuccess ? (
                 <div className="text-center py-6">
                   <CheckCircleIcon className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">
+                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                     Регистрация успешно отправлена!
                   </h4>
-                  <p className="text-gray-600">
-                    {event.is_private 
-                      ? 'Ваша заявка отправлена организатору на рассмотрение.' 
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {event.is_private
+                      ? 'Ваша заявка отправлена организатору на рассмотрение.'
                       : 'Вы успешно зарегистрировались на событие.'}
                   </p>
                 </div>
               ) : (
                 <>
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Ваше имя
                     </label>
                     <input
                       type="text"
                       value={registrationForm.name}
                       onChange={(e) => handleFormChange('name', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Введите ваше имя"
                       required
                     />
                   </div>
-                  
+
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Email
                     </label>
                     <input
                       type="email"
                       value={registrationForm.email}
                       onChange={(e) => handleFormChange('email', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Введите ваш email"
                       required
                     />
                   </div>
-                  
+
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Телефон (опционально)
                     </label>
                     <input
                       type="tel"
                       value={registrationForm.phone}
                       onChange={(e) => handleFormChange('phone', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="+7 (999) 999-99-99"
                     />
                   </div>
-                  
+
                   <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Комментарий (опционально)
                     </label>
                     <textarea
                       value={registrationForm.notes}
                       onChange={(e) => handleFormChange('notes', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Дополнительная информация для организатора"
                       rows={3}
                     />
                   </div>
-                  
+
                   {registrationError && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      <p className="text-sm text-red-800">{registrationError}</p>
+                    <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-sm text-red-800 dark:text-red-300">{registrationError}</p>
                     </div>
                   )}
-                  
-                  <div className="text-sm text-gray-500 mb-4">
+
+                  <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                     <p>После регистрации организатор {event.owner.full_name} получит уведомление о вашей заявке.</p>
                     {event.is_private && (
-                      <p className="mt-2 text-yellow-600">
+                      <p className="mt-2 text-yellow-600 dark:text-yellow-400">
                         Это приватное событие. Ваша заявка будет рассмотрена организатором.
                       </p>
                     )}
@@ -928,13 +1023,13 @@ export const EventDetails: React.FC = () => {
                 </>
               )}
             </div>
-            
-            <div className="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end space-x-3">
+
+            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-700/50 rounded-b-lg flex justify-end space-x-3">
               {!registrationSuccess && (
                 <>
                   <button
                     onClick={() => setShowRegistrationForm(false)}
-                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-600 border border-gray-300 dark:border-slate-500 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-500"
                     disabled={registrationLoading}
                   >
                     Отмена
@@ -1637,7 +1732,7 @@ export const EventDetails: React.FC = () => {
                               <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-start">
                                   <div className="flex-shrink-0 mr-4">
-                                    {getFileIcon(file.category)}
+                                    {getFileIcon(file.original_name, file.category)}
                                   </div>
                                   <div className="flex-1">
                                     <h4 className="font-medium text-gray-900 text-lg">{file.name}</h4>

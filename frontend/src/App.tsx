@@ -12,12 +12,14 @@ import { RoleBasedRedirect } from "./components/auth/RoleBasedRedirect";
 import ProfilePage from "./components/profile/ProfilePage";
 import AdminDashboard from "./components/admin/AdminDashboard";
 import StudentDashboard from "./components/student/StudentDashboard";
+import UserResultsPage from "./components/student/UserResultsPage";
 import { UserList } from "./components/admin/users/UsersPage";
 import { UserProfilePage } from "./components/admin/users/id/UserEditPage";
 import { EventList } from "./components/admin/events/EventList";
 import {EventListPublic} from './components/student/events/EventList'
 import { EventDetails } from "./components/student/events/ShowEvent";
 import EventManagePage from './components/admin/events/EventManagePage';
+import EventCreatePage from './components/student/events/EventCreatePage';
 import { EventStatisticsPage } from './components/stats';
 import { ParticipantStatisticsPage } from './components/stats';
 import ReportsPage from './components/admin/reports/ReportsPage';
@@ -53,6 +55,14 @@ function App() {
 						<Route path="/login" element={<LoginForm />} />
 						<Route path="/register" element={<RegisterForm />} />
 						<Route path="/profile" element={<ProfilePage />} />
+						<Route
+							path="/events/create"
+							element={
+								<ProtectedRoute>
+									<EventCreatePage />
+								</ProtectedRoute>
+							}
+						/>
 
 						{/* Редирект после логина */}
 						<Route
@@ -99,6 +109,8 @@ function App() {
 							}
 						/>
 
+						
+
 						<Route
 							path="/admin/users"
 							element={
@@ -139,6 +151,14 @@ function App() {
 							element={
 								<ProtectedRoute requiredRole="user">
 									<StudentDashboard />
+								</ProtectedRoute>
+							}
+						/>
+						<Route
+							path="/user/results"
+							element={
+								<ProtectedRoute requiredRole="user">
+									<UserResultsPage />
 								</ProtectedRoute>
 							}
 						/>

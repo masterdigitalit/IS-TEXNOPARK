@@ -29,23 +29,23 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => {
   return (
     <div className={`
-      bg-white rounded-2xl border-2 border-gray-100 p-6 
-      hover:shadow-elevated transition-all-lg group
+      bg-white dark:bg-slate-800 rounded-2xl border-2 border-gray-100 dark:border-slate-700 p-6
+      hover:shadow-elevated transition-all-lg group dark:transition-theme
       ${className || ''}
     `}>
       <div className="flex items-center justify-between mb-4">
         <div className={`
-          p-3 rounded-xl bg-gradient-to-br ${gradients[color]} text-white 
+          p-3 rounded-xl bg-gradient-to-br ${gradients[color]} text-white
           shadow-lg group-hover:scale-110 transition-all-sm
         `}>
           {icon}
         </div>
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium text-gray-500">{title}</p>
-        <p className="text-3xl font-bold text-gray-900">{value}</p>
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
+        <p className="text-3xl font-bold text-gray-900 dark:text-white">{value}</p>
         {description && (
-          <p className="text-xs text-gray-400">{description}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{description}</p>
         )}
       </div>
     </div>
@@ -76,18 +76,18 @@ export const GradeDistribution: React.FC<GradeDistributionProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-soft p-6">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl border-2 border-gray-100 dark:border-slate-700 shadow-soft p-6 transition-theme">
       <div className="flex items-center gap-2 mb-6">
-        <StarIcon className="h-5 w-5 text-blue-600" />
-        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+        <StarIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
       </div>
       <div className="space-y-4">
         {grades.map((item) => (
           <div key={item.grade} className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center border border-gray-200">
-              <span className="text-lg font-bold text-gray-900">{item.grade}</span>
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center border border-gray-200 dark:border-slate-600">
+              <span className="text-lg font-bold text-gray-900 dark:text-white">{item.grade}</span>
             </div>
-            <div className="flex-1 h-12 bg-gray-100 rounded-full overflow-hidden">
+            <div className="flex-1 h-12 bg-gray-100 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
                 className={`h-full bg-gradient-to-r ${gradeColors[item.grade as keyof typeof gradeColors]} rounded-full transition-all-lg duration-500 flex items-center justify-end pr-4`}
                 style={{ width: `${(item.count / maxCount) * 100}%` }}
@@ -134,8 +134,8 @@ export const RatingCard: React.FC<RatingCardProps> = ({ rating, className }) => 
 
   return (
     <div className={`
-      bg-gradient-subtle rounded-xl border border-gray-100 p-5 
-      hover:border-blue-200 transition-all-sm
+      bg-gradient-subtle dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 p-5
+      hover:border-blue-200 dark:hover:border-blue-700 transition-all-sm dark:transition-theme
       ${className || ''}
     `}>
       <div className="flex items-start justify-between mb-3">
@@ -146,8 +146,8 @@ export const RatingCard: React.FC<RatingCardProps> = ({ rating, className }) => 
             </span>
           </div>
           <div>
-            <p className="font-semibold text-gray-900">{rating.referee_name}</p>
-            <p className="text-xs text-gray-500">{formatDate(rating.created_at)}</p>
+            <p className="font-semibold text-gray-900 dark:text-white">{rating.referee_name}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(rating.created_at)}</p>
           </div>
         </div>
         <div className={`
@@ -161,8 +161,8 @@ export const RatingCard: React.FC<RatingCardProps> = ({ rating, className }) => 
         </div>
       </div>
       {rating.comment && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <p className="text-sm text-gray-700 bg-white/60 rounded-lg p-3">{rating.comment}</p>
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-600">
+          <p className="text-sm text-gray-700 dark:text-gray-300 bg-white/60 dark:bg-slate-700/60 rounded-lg p-3">{rating.comment}</p>
         </div>
       )}
     </div>
@@ -189,15 +189,15 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = ({ entry, className
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 4.5) return 'text-emerald-600';
-    if (score >= 3.5) return 'text-blue-600';
-    if (score >= 2.5) return 'text-amber-600';
-    return 'text-red-600';
+    if (score >= 4.5) return 'text-emerald-600 dark:text-emerald-400';
+    if (score >= 3.5) return 'text-blue-600 dark:text-blue-400';
+    if (score >= 2.5) return 'text-amber-600 dark:text-amber-400';
+    return 'text-red-600 dark:text-red-400';
   };
 
   return (
     <div className={`
-      flex items-center gap-4 p-5 hover:bg-blue-50 transition-all-sm
+      flex items-center gap-4 p-5 hover:bg-blue-50 dark:hover:bg-slate-700/50 transition-all-sm
       ${className || ''}
     `}>
       <div className={`
@@ -208,7 +208,7 @@ export const LeaderboardRow: React.FC<LeaderboardRowProps> = ({ entry, className
         {entry.position}
       </div>
       <div className="flex-1">
-        <p className="font-semibold text-gray-900">{entry.participant_name}</p>
+        <p className="font-semibold text-gray-900 dark:text-white">{entry.participant_name}</p>
       </div>
       <div className="text-right">
         <div className="flex items-center gap-2">
@@ -237,8 +237,8 @@ interface ParticipantCardProps {
 export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant, className }) => {
   return (
     <div className={`
-      bg-white rounded-2xl border-2 border-gray-100 shadow-soft p-6
-      transition-all-lg hover:shadow-elevated
+      bg-white dark:bg-slate-800 rounded-2xl border-2 border-gray-100 dark:border-slate-700 shadow-soft p-6
+      transition-all-lg hover:shadow-elevated dark:transition-theme
       ${className || ''}
     `}>
       <div className="flex items-start justify-between mb-6">
@@ -249,34 +249,34 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant, c
             </span>
           </div>
           <div>
-            <h3 className="text-xl font-bold text-gray-900">{participant.participant_name}</h3>
-            <p className="text-sm text-gray-500">{participant.participant_email}</p>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{participant.participant_name}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{participant.participant_email}</p>
           </div>
         </div>
         {participant.final_score && (
           <div className="text-right">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
-              <StarSolidIcon className="h-5 w-5 text-blue-600" />
-              <p className="text-2xl font-bold text-blue-600">{participant.final_score}</p>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-100 dark:border-blue-800">
+              <StarSolidIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{participant.final_score}</p>
             </div>
-            <p className="text-xs text-gray-500 mt-1">итоговый балл</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">итоговый балл</p>
           </div>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         {participant.average_score && (
-          <div className="bg-gradient-subtle rounded-xl p-4 border border-gray-100">
-            <p className="text-xs text-gray-500 mb-2 font-medium">Средний балл</p>
-            <p className="text-2xl font-bold text-gray-900">
+          <div className="bg-gradient-subtle dark:bg-slate-700/50 rounded-xl p-4 border border-gray-100 dark:border-slate-600">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Средний балл</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">
               {participant.average_score.toFixed(2)}
             </p>
           </div>
         )}
         {participant.most_popular_grades && (
-          <div className="bg-gradient-subtle rounded-xl p-4 border border-gray-100">
-            <p className="text-xs text-gray-500 mb-2 font-medium">Популярные оценки</p>
-            <p className="text-lg font-bold text-gray-900">
+          <div className="bg-gradient-subtle dark:bg-slate-700/50 rounded-xl p-4 border border-gray-100 dark:border-slate-600">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Популярные оценки</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
               {participant.most_popular_grades}
             </p>
           </div>
@@ -284,13 +284,13 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant, c
       </div>
 
       {Object.keys(participant.session_scores_count).length > 0 && (
-        <div className="mt-6 pt-6 border-t border-gray-100">
-          <p className="text-xs text-gray-500 mb-3 font-medium">Оценок по сессиям</p>
+        <div className="mt-6 pt-6 border-t border-gray-100 dark:border-slate-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 font-medium">Оценок по сессиям</p>
           <div className="flex flex-wrap gap-2">
             {Object.entries(participant.session_scores_count).map(([session, count]) => (
               <span
                 key={session}
-                className="px-3 py-2 bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl border border-blue-100"
+                className="px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-semibold rounded-xl border border-blue-100 dark:border-blue-800"
               >
                 {session.replace(/_/g, ' ')}: {count}
               </span>

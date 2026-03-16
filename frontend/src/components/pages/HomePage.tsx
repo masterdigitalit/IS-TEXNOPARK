@@ -181,7 +181,7 @@ const HomePage = () => {
       </section>
 
       {/* Problem & Solution Section */}
-      <section className="py-24 bg-gradient-subtle dark:from-slate-900 dark:to-slate-800">
+      <section className="py-24 bg-gradient-subtle dark:from-slate-900 dark:to-slate-800 transition-theme">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
             <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -254,7 +254,7 @@ const HomePage = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-24 bg-white dark:bg-slate-900">
+      <section className="py-24 bg-white dark:bg-slate-900 transition-theme">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -287,7 +287,7 @@ const HomePage = () => {
       </section>
 
       {/* User Types Section */}
-      <section className="py-24 bg-gradient-subtle dark:from-slate-900 dark:to-slate-800">
+      <section className="py-24 bg-gradient-subtle dark:from-slate-900 dark:to-slate-800 transition-theme">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -397,7 +397,7 @@ const HomePage = () => {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 dark:bg-slate-950 text-white py-16">
+      <footer className="bg-gray-900 dark:bg-slate-950 text-white py-16 transition-theme">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-8">
             <div className="text-center md:text-left">
@@ -412,13 +412,13 @@ const HomePage = () => {
             </div>
 
             <div className="flex space-x-8">
-              <a href="#" className="text-gray-400 hover:text-white transition-all-sm font-medium">
+              <a href="#" className="text-gray-400 hover:text-white dark:hover:text-blue-400 transition-all-sm font-medium">
                 Документация
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-all-sm font-medium">
+              <a href="#" className="text-gray-400 hover:text-white dark:hover:text-blue-400 transition-all-sm font-medium">
                 Контакты
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-all-sm font-medium">
+              <a href="#" className="text-gray-400 hover:text-white dark:hover:text-blue-400 transition-all-sm font-medium">
                 О проекте
               </a>
             </div>

@@ -18,13 +18,15 @@ import {
   BuildingOfficeIcon,
   ChartBarIcon,
   CheckCircleIcon,
+  PlusIcon,
   XCircleIcon,
   PlayCircleIcon,
   PauseCircleIcon,
   ComputerDesktopIcon,
   BuildingLibraryIcon,
   ExclamationCircleIcon,
-  BellAlertIcon
+  BellAlertIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 
 // Типы данных
@@ -116,6 +118,85 @@ interface DashboardStats {
   total_sessions: number;
   ongoing_events: number;
 }
+
+// Вспомогательные компоненты
+interface StatCardProps {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  darkColor?: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, darkColor }) => {
+  const colorClasses: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+    green: 'bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+    orange: 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+    purple: 'bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+    yellow: 'bg-yellow-50 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
+  };
+
+  return (
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-4 transition-all-sm hover:shadow-md">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">{value.toLocaleString()}</p>
+        </div>
+        <div className={`p-3 rounded-xl ${colorClasses[color]} ${darkColor || ''} transition-transform-sm hover:scale-110`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface TabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  count?: number;
+  color: string;
+}
+
+const TabButton: React.FC<TabButtonProps> = ({ active, onClick, icon, label, count, color }) => {
+  const activeClasses: Record<string, string> = {
+    blue: 'border-blue-500 text-blue-600 dark:text-blue-400',
+    orange: 'border-orange-500 text-orange-600 dark:text-orange-400',
+    green: 'border-green-500 text-green-600 dark:text-green-400',
+    gray: 'border-gray-500 text-gray-600 dark:text-gray-400',
+  };
+
+  const badgeClasses: Record<string, string> = {
+    blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400',
+    orange: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400',
+    green: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400',
+    gray: 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400',
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center px-4 py-3.5 font-medium text-sm whitespace-nowrap border-b-2 transition-all-sm ${
+        active
+          ? activeClasses[color]
+          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-slate-600'
+      }`}
+    >
+      <span className="h-4 w-4 mr-2">{icon}</span>
+      {label}
+      {count !== undefined && count > 0 && (
+        <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+          active ? badgeClasses[color] : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400'
+        }`}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+};
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -245,7 +326,7 @@ const StudentDashboard = () => {
           ongoingEventsCount++;
         }
       });
-      
+      //######################## taget Participants
       const totalParticipants = uniqueEvents.reduce((sum, event) => sum + event.participants_count, 0);
       
       // Считаем предстоящие события (где регистрация открыта или есть будущие сессии)
@@ -286,11 +367,7 @@ const StudentDashboard = () => {
   const handleNavigateToEvent = (eventId: number) => {
     navigate(`/user/events/${eventId}`);
   };
-  
-  const handleNavigateToCreateEvent = () => {
-    navigate('/admin/events/create');
-  };
-  
+
   const handleRefresh = () => {
     loadDashboardData();
   };
@@ -588,191 +665,139 @@ const StudentDashboard = () => {
   
   const filteredEvents = getFilteredEvents();
   const currentSessions = getCurrentSessions();
-  
+
   // Получаем события, которые идут (для боковой панели)
   const ongoingEvents = events.filter(event => {
     const eventStatus = getEventCurrentStatus(event);
     return eventStatus === 'ongoing_now' || eventStatus === 'ongoing_event';
   });
-  
+
   return (
-    <div className="p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 p-6 transition-theme">
       {/* Заголовок */}
       <div className="mb-8">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Панель конференций</h1>
-            <p className="text-gray-600 mt-2">
-              {user?.full_name ? `Добро пожаловать, ${user.full_name}!` : 'Ваши конференции и мероприятия'}
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Панель конференций</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {user?.full_name ? `${user.full_name}, добро пожаловать!` : 'Управляйте своими конференциями'}
             </p>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap gap-3">
             <button
               onClick={handleRefresh}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50"
+              className="inline-flex items-center px-4 py-2.5 border border-gray-300 dark:border-slate-600 rounded-xl text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all-sm shadow-sm hover:shadow"
             >
+              <ArrowPathIcon className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Обновить
             </button>
-            <button
-              onClick={handleNavigateToCreateEvent}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            <Link
+              to="/events/create"
+              className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all-sm shadow-md hover:shadow-lg"
             >
+              <PlusIcon className="h-5 w-5 mr-2" />
               Создать конференцию
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Статистика */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <StatCard
+          title="Всего конференций"
+          value={stats.total_events}
+          icon={<CalendarDaysIcon className="h-6 w-6" />}
+          color="blue"
+          darkColor="dark:from-blue-900/30 dark:to-blue-800/30"
+        />
+        <StatCard
+          title="Предстоящие"
+          value={stats.upcoming_events}
+          icon={<ClockIcon className="h-6 w-6" />}
+          color="green"
+          darkColor="dark:from-green-900/30 dark:to-green-800/30"
+        />
+        <StatCard
+          title="Идут сейчас"
+          value={stats.ongoing_events}
+          icon={<FireIcon className="h-6 w-6" />}
+          color="orange"
+          darkColor="dark:from-orange-900/30 dark:to-orange-800/30"
+        />
+        <StatCard
+          title="Активных сессий"
+          value={stats.ongoing_sessions}
+          icon={<VideoCameraIcon className="h-6 w-6" />}
+          color="purple"
+          darkColor="dark:from-purple-900/30 dark:to-purple-800/30"
+        />
+        <StatCard
+          title="Участников"
+          value={stats.total_participants}
+          icon={<UserGroupIcon className="h-6 w-6" />}
+          color="yellow"
+          darkColor="dark:from-yellow-900/30 dark:to-yellow-800/30"
+        />
+      </div>
+
+      {/* Ошибка */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl transition-theme">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <ExclamationCircleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-3" />
+              <span className="text-red-800 dark:text-red-300 font-medium">{error}</span>
+            </div>
+            <button
+              onClick={handleRefresh}
+              className="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline font-medium"
+            >
+              Повторить
             </button>
           </div>
         </div>
-      </div>
-      
-      {/* Статистика */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-blue-50 rounded-lg mr-4">
-              <CalendarDaysIcon className="h-6 w-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Всего конференций</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total_events}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-green-50 rounded-lg mr-4">
-              <ClockIcon className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Активные и предстоящие</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.upcoming_events}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-orange-50 rounded-lg mr-4">
-              <FireIcon className="h-6 w-6 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Идут сейчас</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.ongoing_events}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-purple-50 rounded-lg mr-4">
-              <VideoCameraIcon className="h-6 w-6 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Активных сессий</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.ongoing_sessions}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center">
-            <div className="p-3 bg-yellow-50 rounded-lg mr-4">
-              <UserGroupIcon className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Всего участников</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total_participants}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Ошибка */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center">
-            <span className="text-red-800 font-medium">{error}</span>
-          </div>
-          <button 
-            onClick={handleRefresh}
-            className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
-          >
-            Попробовать снова
-          </button>
-        </div>
       )}
-      
+
       {/* Основной контент */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Список конференций */}
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden transition-theme">
             {/* Табы */}
-            <div className="border-b border-gray-200">
-              <nav className="flex overflow-x-auto">
-                <button
+            <div className="border-b border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
+              <nav className="flex overflow-x-auto scrollbar-hide">
+                <TabButton
+                  active={activeTab === 'upcoming'}
                   onClick={() => setActiveTab('upcoming')}
-                  className={`px-6 py-4 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'upcoming'
-                      ? 'border-b-2 border-blue-500 text-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <CalendarDaysIcon className="h-4 w-4 mr-2" />
-                    Предстоящие и текущие
-                    <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                      {stats.upcoming_events}
-                    </span>
-                  </div>
-                </button>
-                
-                <button
+                  icon={<CalendarDaysIcon className="h-4 w-4" />}
+                  label="Предстоящие"
+                  count={stats.upcoming_events}
+                  color="blue"
+                />
+                <TabButton
+                  active={activeTab === 'ongoing'}
                   onClick={() => setActiveTab('ongoing')}
-                  className={`px-6 py-4 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'ongoing'
-                      ? 'border-b-2 border-blue-500 text-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <FireIcon className="h-4 w-4 mr-2" />
-                    Идут сейчас
-                    <span className="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full">
-                      {stats.ongoing_events}
-                    </span>
-                  </div>
-                </button>
-                
-                <button
+                  icon={<FireIcon className="h-4 w-4" />}
+                  label="Идут сейчас"
+                  count={stats.ongoing_events}
+                  color="orange"
+                />
+                <TabButton
+                  active={activeTab === 'my'}
                   onClick={() => setActiveTab('my')}
-                  className={`px-6 py-4 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'my'
-                      ? 'border-b-2 border-blue-500 text-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <UserIcon className="h-4 w-4 mr-2" />
-                    Мои конференции
-                    <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                      {myEvents.length}
-                    </span>
-                  </div>
-                </button>
-                
-                <button
+                  icon={<UserIcon className="h-4 w-4" />}
+                  label="Мои"
+                  count={myEvents.length}
+                  color="green"
+                />
+                <TabButton
+                  active={activeTab === 'past'}
                   onClick={() => setActiveTab('past')}
-                  className={`px-6 py-4 font-medium text-sm whitespace-nowrap ${
-                    activeTab === 'past'
-                      ? 'border-b-2 border-blue-500 text-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    Прошедшие
-                  </div>
-                </button>
+                  icon={<CalendarIcon className="h-4 w-4" />}
+                  label="Прошедшие"
+                  color="gray"
+                />
               </nav>
             </div>
             
@@ -1114,12 +1139,13 @@ const StudentDashboard = () => {
                   )}
                   
                   {activeTab === 'my' && (
-                    <button
-                      onClick={handleNavigateToCreateEvent}
+                    <Link
+                      to="/events/create"
                       className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
+                      <PlusIcon className="h-4 w-4 mr-2" />
                       Создать конференцию
-                    </button>
+                    </Link>
                   )}
                 </div>
               )}
@@ -1286,21 +1312,21 @@ const StudentDashboard = () => {
           )}
           
           {/* Быстрые действия */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Быстрые действия</h3>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6 transition-theme">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Быстрые действия</h3>
             <div className="space-y-3">
-              <button
-                onClick={handleNavigateToCreateEvent}
-                className="w-full flex items-center justify-between p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100"
+              <Link
+                to="/events/create"
+                className="w-full flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all-sm"
               >
                 <div className="flex items-center">
-                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
-                    <CalendarDaysIcon className="h-4 w-4 text-blue-600" />
+                  <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center mr-3">
+                    <CalendarDaysIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   </div>
                   <span className="font-medium">Создать конференцию</span>
                 </div>
                 <ArrowRightIcon className="h-4 w-4" />
-              </button>
+              </Link>
               
               <Link
                 to="/user/events"

@@ -1,13 +1,14 @@
 // src/components/dashboards/AdminDashboard.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  UserGroupIcon, 
-  CogIcon, 
+import {
+  UserGroupIcon,
+  CogIcon,
   ChartBarIcon,
   DocumentTextIcon,
   AcademicCapIcon,
-  TrophyIcon
+  TrophyIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 
 const AdminDashboard = () => {
@@ -26,11 +27,22 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-6 lg:p-8 transition-theme">
       {/* Заголовок */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Административная панель</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Управление системой и всеми пользователями</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Административная панель</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">Управление системой и всеми пользователями</p>
+          </div>
+          <Link
+            to="/events/create"
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all-sm"
+          >
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Создать событие
+          </Link>
+        </div>
       </div>
 
       {/* Статистика */}
@@ -51,7 +63,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Быстрые действия */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 mb-8 border border-gray-100 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 mb-8 border border-gray-100 dark:border-slate-700 transition-theme">
         <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Быстрые действия</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {quickActions.map((action, index) => (
@@ -69,11 +81,11 @@ const AdminDashboard = () => {
 
       {/* Последние активности */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 border border-gray-100 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 border border-gray-100 dark:border-slate-700 transition-theme">
           <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Последние действия</h2>
           <div className="space-y-3">
             {['Новый пользователь зарегистрирован', 'Создана конференция "Наука 2025"', 'Обновлены настройки системы', 'Добавлен новый судья'].map((action, index) => (
-              <div key={index} className="flex items-center p-4 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+              <div key={index} className="flex items-center p-4 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl transition-theme">
                 <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full mr-3 shadow-glow-green"></div>
                 <span className="text-gray-700 dark:text-gray-300 font-medium">{action}</span>
                 <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">5 мин назад</span>
@@ -82,22 +94,22 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 border border-gray-100 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-soft p-6 border border-gray-100 dark:border-slate-700 transition-theme">
           <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Статус системы</h2>
           <div className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl transition-theme">
               <span className="font-medium text-gray-700 dark:text-gray-300">Сервер</span>
               <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm font-medium">Online</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl transition-theme">
               <span className="font-medium text-gray-700 dark:text-gray-300">База данных</span>
               <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm font-medium">Стабильно</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl transition-theme">
               <span className="font-medium text-gray-700 dark:text-gray-300">API</span>
               <span className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-sm font-medium">Работает</span>
             </div>
-            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl">
+            <div className="flex justify-between items-center p-3 bg-gradient-subtle dark:bg-slate-700/50 rounded-xl transition-theme">
               <span className="font-medium text-gray-700 dark:text-gray-300">Обновления</span>
               <span className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-full text-sm font-medium">Доступны</span>
             </div>
